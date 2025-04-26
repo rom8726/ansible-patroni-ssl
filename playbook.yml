@@ -54,10 +54,10 @@
         path: "{{ data_dir }}"
         state: absent
 
-    - name: Копирование конфигов Patroni
-      copy:
-        src: "files/patroni{{ node_id }}.yml"
-        dest: "{{ patroni_config }}"
+    - name: Создание конфига Patroni
+      template:
+        src: patroni.yml.j2
+        dest: /etc/patroni.yml
         mode: '0644'
 
     - name: Установка владельца для директории PostgreSQL
@@ -68,11 +68,6 @@
         group: postgres
         mode: '0700'
         recurse: yes
-
-#    - name: Удаление /services/demo из Etcd
-#      shell: |
-#        etcdctl rm /services/demo --prefix
-#      when: inventory_hostname == 'patroni1'
 
     - name: Очистка предыдущего состояния etcd
       file:
@@ -146,7 +141,7 @@
 
     - name: Ожидание формирования кластера
       shell: |
-        timeout 30 bash -c 'until etcdctl --endpoints=http://{{ ansible_host }}:2379 cluster-health; do sleep 2; done'
+        timeout 30 bash -c 'until etcdctl --endpoints=http://{{ ansible_host }}:2379 cluster-health; do sleep 5; done'
       register: cluster_health
       until: cluster_health.rc == 0
       retries: 10

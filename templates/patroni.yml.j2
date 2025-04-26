@@ -1,0 +1,64 @@
+scope: {{ patroni_scope }}
+name: {{ inventory_hostname }}
+
+restapi:
+  listen: 0.0.0.0:{{ patroni_api_port }}
+  connect_address: {{ ansible_host }}:{{ patroni_api_port }}
+
+etcd:
+  hosts: {% for host in groups['promoters'] %}{{ hostvars[host]['ansible_host'] }}:{{ etcd_client_port }}{% if not loop.last %},{% endif %}{% endfor %}
+
+bootstrap:
+  dcs:
+    ttl: {{ patroni_ttl }}
+    loop_wait: {{ patroni_loop_wait }}
+    retry_timeout: {{ patroni_retry_timeout }}
+    maximum_lag_on_failover: {{ patroni_max_lag }}
+    postgresql:
+      use_pg_rewind: {{ patroni_use_pg_rewind | lower }}
+      use_slots: {{ patroni_use_slots | lower }}
+  initdb:
+    - encoding: {{ postgresql_encoding }}
+    - data-checksums
+  users:
+    postgres:
+      password: {{ postgresql_superuser_password }}
+      options:
+        - superuser
+        - createdb
+
+postgresql:
+  listen: 0.0.0.0:{{ postgresql_port }}
+  connect_address: {{ ansible_host }}:{{ postgresql_port }}
+  data_dir: {{ postgresql_data_dir }}
+  bin_dir: {{ postgresql_bin_dir }}
+  authentication:
+    superuser:
+      username: {{ postgresql_superuser_name }}
+      password: {{ postgresql_superuser_password }}
+    replication:
+      username: {{ postgresql_replication_user }}
+      password: {{ postgresql_replication_password }}
+  parameters:
+    max_connections: {{ postgresql_max_connections }}
+    shared_buffers: {{ postgresql_shared_buffers }}
+    wal_level: {{ postgresql_wal_level }}
+    hot_standby: "on"
+    shared_preload_libraries: {{ postgresql_shared_preload_libraries }}
+{% if postgresql_custom_parameters is defined %}
+{% for param, value in postgresql_custom_parameters.items() %}
+    {{ param }}: {{ value }}
+{% endfor %}
+{% endif %}
+  create_replica_methods:
+    - basebackup
+  basebackup:
+    max-rate: 100M
+    checkpoint: fast
+  pg_hba:
+    - host replication {{ postgresql_replication_user }} {{ postgresql_replication_network }} {{ postgresql_replication_auth_method }}
+{% if postgresql_additional_pg_hba is defined %}
+{% for rule in postgresql_additional_pg_hba %}
+    - {{ rule }}
+{% endfor %}
+{% endif %}

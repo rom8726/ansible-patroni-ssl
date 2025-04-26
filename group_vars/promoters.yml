@@ -1,0 +1,43 @@
+# Common Patroni settings
+patroni_scope: demo
+patroni_api_port: 8008
+patroni_ttl: 30
+patroni_loop_wait: 10
+patroni_retry_timeout: 10
+patroni_max_lag: 1048576
+patroni_use_pg_rewind: true
+patroni_use_slots: true
+
+# etcd settings
+etcd_client_port: 2379
+
+# PostgreSQL settigns
+postgresql_version: 16
+postgresql_encoding: UTF8
+postgresql_port: 5432
+postgresql_data_dir: "/var/lib/postgresql/{{ postgresql_version }}/main"
+postgresql_bin_dir: "/usr/lib/postgresql/{{ postgresql_version }}/bin"
+
+# PostgreSQL users
+postgresql_superuser_name: postgres
+postgresql_superuser_password: "password"
+postgresql_replication_user: replicator
+postgresql_replication_password: "password"
+postgresql_replication_network: "0.0.0.0/0"
+postgresql_replication_auth_method: md5
+
+# PostgreSQL params
+postgresql_max_connections: 100
+postgresql_shared_buffers: 256MB
+postgresql_wal_level: replica
+postgresql_shared_preload_libraries: "pg_stat_statements, auto_explain"
+
+# Additional PostgreSQL params (optional)
+postgresql_custom_parameters:
+  max_worker_processes: 8
+  max_wal_senders: 10
+  wal_keep_segments: 32
+
+# Additional pg_hba.conf rules (optional)
+postgresql_additional_pg_hba:
+  - "host all all 0.0.0.0/0 md5"
