@@ -33,7 +33,7 @@ make up
 ```
 or
 ```shell
-ansible-playbook -i inventory.ini playbook.yml "clean_etcd=true"
+ansible-playbook -i inventory.ini playbook.yml
 ```
 
 ## Default Configuration
