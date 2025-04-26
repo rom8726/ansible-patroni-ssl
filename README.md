@@ -4,7 +4,7 @@ Ansible playbook for deploy PostgreSQL Patroni cluster
 ⚠️ **WARNING: This configuration is for testing/development purposes only. DO NOT use in production without proper security hardening!**
 
 ## Overview
-This Ansible playbook automates the deployment of a PostgreSQL high-availability cluster using Patroni and etcd. The setup includes a 3-node cluster configuration with automatic failover capabilities.
+This Ansible playbook automates the deployment of a PostgreSQL high-availability cluster using Patroni and etcd. The setup includes a 3-node (you can change) cluster configuration with automatic failover capabilities.
 
 ## Prerequisites
 - Ubuntu/Debian-based system
