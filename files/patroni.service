@@ -1,0 +1,19 @@
+[Unit]
+Description=Patroni Daemon
+After=syslog.target network.target etcd.service
+
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/local/bin/patroni /etc/patroni.yml
+StandardOutput=append:/var/log/patroni/patroni.log
+StandardError=append:/var/log/patroni/patroni.log
+KillMode=process
+TimeoutSec=30
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

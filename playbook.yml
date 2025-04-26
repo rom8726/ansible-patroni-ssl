@@ -1,0 +1,196 @@
+---
+- name: Установка Patroni-кластера
+  hosts: promoters
+  become: true
+  vars:
+    pg_version: 16
+    data_dir: "/var/lib/postgresql/{{ pg_version }}/main"
+    patroni_config: "/etc/patroni.yml"
+
+  tasks:
+    - name: Установка зависимостей
+      apt:
+        name:
+          - python3-pip
+          - python3-psycopg2
+          - etcd
+          - wget
+          - gnupg
+        update_cache: yes
+
+    - name: Добавление GPG-ключа PostgreSQL
+      ansible.builtin.shell: |
+        wget -qO - https://www.postgresql.org/media/keys/ACCC4CF8.asc | tee /etc/apt/trusted.gpg.d/postgresql.asc
+      args:
+        creates: /etc/apt/trusted.gpg.d/postgresql.asc
+
+    - name: Добавление репозитория PostgreSQL
+      ansible.builtin.apt_repository:
+        repo: "deb http://apt.postgresql.org/pub/repos/apt {{ ansible_lsb.codename }}-pgdg main"
+        state: present
+        filename: "pgdg"
+
+    - name: Обновление apt
+      apt:
+        update_cache: yes
+
+    - name: Установка PostgreSQL {{ pg_version }}
+      apt:
+        name: postgresql-{{ pg_version }}
+        state: present
+
+    - name: Установка patroni
+      pip:
+        name: patroni[etcd]
+
+    - name: Остановка PostgreSQL
+      service:
+        name: postgresql
+        state: stopped
+        enabled: no
+
+    - name: Очистка data_dir
+      file:
+        path: "{{ data_dir }}"
+        state: absent
+
+    - name: Копирование конфигов Patroni
+      copy:
+        src: "files/patroni{{ node_id }}.yml"
+        dest: "{{ patroni_config }}"
+        mode: '0644'
+
+    - name: Установка владельца для директории PostgreSQL
+      file:
+        path: "{{ data_dir }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+        recurse: yes
+
+#    - name: Удаление /services/demo из Etcd
+#      shell: |
+#        etcdctl rm /services/demo --prefix
+#      when: inventory_hostname == 'patroni1'
+
+    - name: Очистка предыдущего состояния etcd
+      file:
+        path: /var/lib/etcd
+        state: absent
+      when: clean_etcd is defined and clean_etcd
+
+    - name: Создание директории для etcd
+      file:
+        path: /var/lib/etcd
+        state: directory
+        owner: etcd
+        group: etcd
+        mode: '0700'
+
+    - name: Остановка etcd если запущен
+      systemd:
+        name: etcd
+        state: stopped
+      ignore_errors: true
+
+    - name: Шаблонизация конфигурации etcd
+      template:
+        src: templates/etcd.conf.yml.j2
+        dest: /etc/etcd.yml
+        mode: '0644'
+
+    - name: Установка systemd-юнита etcd
+      copy:
+        src: files/etcd.service
+        dest: /etc/systemd/system/etcd.service
+        mode: '0644'
+
+    - name: Перезапуск etcd
+      systemd:
+        name: etcd
+        daemon_reload: yes
+        enabled: yes
+        state: started
+
+    - name: Запуск первой ноды etcd
+      when: inventory_hostname == "patroni1"
+      block:
+        - name: Запуск etcd на первой ноде
+          systemd:
+            name: etcd
+            daemon_reload: yes
+            enabled: yes
+            state: started
+
+    - name: Ожидание запуска первой ноды
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 2379
+        timeout: 30
+
+    - name: Ожидание готовности первой ноды
+      when: inventory_hostname != "patroni1"
+      wait_for:
+        host: "{{ hostvars['patroni1']['ansible_host'] }}"
+        port: 2379
+        timeout: 30
+
+    - name: Запуск остальных нод etcd
+      when: inventory_hostname != "patroni1"
+      systemd:
+        name: etcd
+        daemon_reload: yes
+        enabled: yes
+        state: started
+
+    - name: Ожидание формирования кластера
+      shell: |
+        timeout 30 bash -c 'until etcdctl --endpoints=http://{{ ansible_host }}:2379 cluster-health; do sleep 2; done'
+      register: cluster_health
+      until: cluster_health.rc == 0
+      retries: 10
+      delay: 5
+
+    - name: Проверка состояния кластера
+      shell: |
+        etcdctl --endpoints=http://{{ ansible_host }}:2379 member list
+      register: etcd_members
+      changed_when: false
+
+    - name: Создание директории для логов
+      file:
+        path: /var/log/patroni
+        state: directory
+        mode: '0755'
+
+    - name: Создание systemd сервиса для Patroni
+      copy:
+        src: files/patroni.service
+        dest: /etc/systemd/system/patroni.service
+        mode: '0644'
+
+    - name: Создание конфигурации logrotate для Patroni
+      copy:
+        dest: /etc/logrotate.d/patroni
+        mode: '0644'
+        content: |
+          /var/log/patroni/patroni.log {
+              daily
+              rotate 7
+              compress
+              delaycompress
+              missingok
+              notifempty
+              create 0640 postgres postgres
+          }
+
+    - name: Перезагрузка systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Запуск и включение сервиса Patroni
+      systemd:
+        name: patroni
+        state: started
+        enabled: yes

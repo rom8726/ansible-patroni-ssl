@@ -1,0 +1,14 @@
+[Unit]
+Description=etcd key-value store
+After=network.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/etcd --config-file /etc/etcd.yml
+Restart=always
+LimitNOFILE=40000
+StandardOutput=append:/var/log/etcd.log
+StandardError=append:/var/log/etcd.log
+
+[Install]
+WantedBy=multi-user.target
