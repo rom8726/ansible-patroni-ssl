@@ -98,16 +98,15 @@ make pg-observe
 ├── haproxy.yml # HAProxy playbook
 ├── pg_observe.yml # Monitoring playbook
 ├── promoters.yml # Variables and settings
-├── files/
-│ ├── etcd.service # etcd systemd service
-│ └── patroni.service # Patroni systemd service
 └── templates/
 │ ├── etcd.conf.yml.j2 # etcd configuration
 │ ├── patroni.yml.j2 # Patroni configuration
 │ ├── haproxy.cfg.j2 # HAProxy configuration
-│ ├── node_exporter.service.j2 # Node exporter service
-│ ├── postgres_exporter.service.j2 # Postgres exporter service
-│ └── postgres_exporter.yaml.j2 # Postgres exporter config
+│ ├── postgres_exporter.yaml.j2 # Postgres exporter config
+│ ├── etcd.service.j2 # etcd systemd service
+│ ├── patroni.service.j2 # Patroni systemd service
+│ ├── node_exporter.service.j2 # Node exporter systemd service
+│ └── postgres_exporter.service.j2 # Postgres exporter systemd service
 ```
 
 ## Important Security Notes
