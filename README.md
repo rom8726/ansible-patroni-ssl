@@ -148,3 +148,27 @@ systemctl status postgres_exporter
 ### Available Metrics
 - System metrics (via node_exporter): http://host:9100/metrics
 - PostgreSQL metrics (via postgres_exporter): http://host:9187/metrics
+
+### PostgreSQL Exporter Metrics
+Postgres Exporter provides the following metric groups:
+
+#### PostgreSQL Settings
+- Monitors PostgreSQL configuration parameters
+- Collects values from all pg_settings entries
+- Includes parameter name, value, unit, and a short description
+- Exposed as GAUGE metrics
+
+#### Replication Status
+- Instance replication status monitoring:
+  - Master/replica state detection
+  - Master status monitoring (is_master metric)
+  - Replica status monitoring (is_replica metric)
+  - Replication lag monitoring in seconds (lag_seconds metric)
+  - All metrics are exposed as a GAUGE type
+
+#### Connection Statistics
+- Detailed connection statistics:
+  - Number of connections by state (active, idle, etc.)
+  - Grouped by wait event types
+  - Total connection count monitoring by different states
+  - Exposed as GAUGE metrics with state and wait_event_type labels
