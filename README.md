@@ -97,7 +97,8 @@ make pg-observe
 ├── playbook.yml # Main playbook
 ├── haproxy.yml # HAProxy playbook
 ├── pg_observe.yml # Monitoring playbook
-├── promoters.yml # Variables and settings
+└── group_vars/
+│ ├── promoters.yml # Variables and settings
 └── templates/
 │ ├── etcd.conf.yml.j2 # etcd configuration
 │ ├── patroni.yml.j2 # Patroni configuration
