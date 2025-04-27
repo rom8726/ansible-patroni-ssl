@@ -1,0 +1,35 @@
+---
+- name: Install and configure HAProxy
+  hosts: haproxy
+  become: true
+  vars:
+    haproxy_config: "/etc/haproxy/haproxy.cfg"
+    postgres_port: 5432
+    patroni_port: 8008
+
+  tasks:
+    - name: Install HAProxy
+      apt:
+        name: haproxy
+        state: present
+        update_cache: yes
+
+    - name: Create HAProxy configuration
+      template:
+        src: templates/haproxy.cfg.j2
+        dest: "{{ haproxy_config }}"
+        mode: '0644'
+      notify: Restart HAProxy
+
+    - name: Enable and start HAProxy
+      systemd:
+        name: haproxy
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  handlers:
+    - name: Restart HAProxy
+      systemd:
+        name: haproxy
+        state: restarted
