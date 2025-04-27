@@ -7,7 +7,7 @@
   vars:
     node_exporter_version: "1.7.0"
     postgres_exporter_version: "0.14.0"
-    arch: "linux-arm64"
+    arch: "linux-amd64"
 
   tasks:
     - name: Create node_exporter system user
