@@ -71,14 +71,16 @@ ansible-playbook -i inventory.ini playbook.yml
 .
 ├── ansible.cfg          # Ansible configuration
 ├── inventory.ini        # Server inventory
-├── playbook.yml        # Main playbook
-├── promoters.yml       # Variables and settings
+├── playbook.yml         # Main playbook
+├── haproxy.yml          # HAProxy playbook
+├── promoters.yml        # Variables and settings
 ├── files/
-│   ├── etcd.service    # etcd systemd service
-│   └── patroni.service # Patroni systemd service
+│   ├── etcd.service     # etcd systemd service
+│   └── patroni.service  # Patroni systemd service
 └── templates/
-    ├── etcd.conf.yml.j2    # etcd configuration
-    └── patroni.yml.j2      # Patroni configuration
+    ├── etcd.conf.yml.j2 # etcd configuration
+    └── patroni.yml.j2   # Patroni configuration
+    └── haproxy.cfg.j2   # HAProxy configuration
 ```
 
 ## Important Security Notes
