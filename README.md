@@ -44,7 +44,7 @@ ansible-playbook -i inventory.ini playbook.yml
 - etcd client: 2379
 - etcd peer: 2380
 - HAProxy PostgreSQL (master): 5000
-- HAProxy PostgreSQL (replica): 5000
+- HAProxy PostgreSQL (replica): 5001
 - HAProxy Statistics: 7000
 
 ### PostgreSQL Settings
