@@ -4,12 +4,11 @@ Ansible playbook for deploy PostgreSQL Patroni cluster
 ⚠️ **WARNING: This configuration is for testing/development purposes only. DO NOT use in production without proper security hardening!**
 
 ## Overview
-This Ansible playbook automates the deployment of a PostgreSQL high-availability cluster using Patroni and etcd. The setup includes a 3-node (you can change) cluster configuration with automatic failover capabilities.
+This Ansible playbook automates the deployment of a PostgreSQL high-availability cluster using Patroni and etcd. The setup includes a 3-node cluster configuration with automatic failover capabilities and monitoring.
 
 ## Prerequisites
 - Ubuntu/Debian-based system
 - Ansible installed on the control node
-- Root access to target machines
 - Network connectivity between all nodes
 
 ## Components
@@ -17,6 +16,8 @@ This Ansible playbook automates the deployment of a PostgreSQL high-availability
 - Patroni
 - etcd (for distributed configuration)
 - Python 3 and pip
+- Node Exporter (system metrics)
+- Postgres Exporter (PostgreSQL metrics)
 
 ## Quick Start
 1. Clone this repository:
@@ -27,13 +28,16 @@ patroni1 ansible_host=192.168.64.2 node_id=1
 patroni2 ansible_host=192.168.64.3 node_id=2
 patroni3 ansible_host=192.168.64.4 node_id=3 
 ```
-3. Run the playbook:
+3. Run the playbooks:
 ```shell
+# Deploy Patroni cluster
 make up
-```
-or
-```shell
-ansible-playbook -i inventory.ini playbook.yml
+
+# Deploy HAProxy
+make haproxy
+
+# Deploy monitoring
+make pg-observe
 ```
 
 ## Default Configuration
@@ -46,6 +50,8 @@ ansible-playbook -i inventory.ini playbook.yml
 - HAProxy PostgreSQL (master): 5000
 - HAProxy PostgreSQL (replica): 5001
 - HAProxy Statistics: 7000
+- Node Exporter: 9100
+- Postgres Exporter: 9187
 
 ### PostgreSQL Settings
 - Version: 16
@@ -69,21 +75,39 @@ ansible-playbook -i inventory.ini playbook.yml
 - Replication user: replicator/password
 - Replication access: 0.0.0.0/0 (all hosts)
 
+### Monitoring Components
+#### Node Exporter
+- Version: 1.7.0
+- Metrics Port: 9100
+- Systemd Service: node_exporter.service
+- User: node_exporter
+
+#### Postgres Exporter
+- Version: 0.14.0
+- Metrics Port: 9187
+- Systemd Service: postgres_exporter.service
+- User: postgres
+- Config Path: /etc/postgres_exporter/postgres_exporter.yaml
+
 ## File Structure
 ``` 
 .
-├── ansible.cfg          # Ansible configuration
-├── inventory.ini        # Server inventory
-├── playbook.yml         # Main playbook
-├── haproxy.yml          # HAProxy playbook
-├── promoters.yml        # Variables and settings
+├── ansible.cfg # Ansible configuration
+├── inventory.ini # Server inventory
+├── playbook.yml # Main playbook
+├── haproxy.yml # HAProxy playbook
+├── pg_observe.yml # Monitoring playbook
+├── promoters.yml # Variables and settings
 ├── files/
-│   ├── etcd.service     # etcd systemd service
-│   └── patroni.service  # Patroni systemd service
+│ ├── etcd.service # etcd systemd service
+│ └── patroni.service # Patroni systemd service
 └── templates/
-    ├── etcd.conf.yml.j2 # etcd configuration
-    └── patroni.yml.j2   # Patroni configuration
-    └── haproxy.cfg.j2   # HAProxy configuration
+│ ├── etcd.conf.yml.j2 # etcd configuration
+│ ├── patroni.yml.j2 # Patroni configuration
+│ ├── haproxy.cfg.j2 # HAProxy configuration
+│ ├── node_exporter.service.j2 # Node exporter service
+│ ├── postgres_exporter.service.j2 # Postgres exporter service
+│ └── postgres_exporter.yaml.j2 # Postgres exporter config
 ```
 
 ## Important Security Notes
@@ -100,6 +124,8 @@ This deployment includes several configurations that are NOT suitable for produc
 - Patroni logs: /var/log/patroni/patroni.log
 - etcd logs: /var/log/etcd.log
 - Log rotation is configured for Patroni logs (7 days retention)
+- Node Exporter logs: journalctl -u node_exporter
+- Postgres Exporter logs: journalctl -u postgres_exporter
 
 ## Service Management
 ``` bash
@@ -112,4 +138,13 @@ systemctl stop patroni
 systemctl status etcd
 systemctl start etcd
 systemctl stop etcd
+
+# Monitoring services
+systemctl status node_exporter
+systemctl status postgres_exporter
 ```
+
+## Monitoring
+### Available Metrics
+- System metrics (via node_exporter): http://host:9100/metrics
+- PostgreSQL metrics (via postgres_exporter): http://host:9187/metrics
