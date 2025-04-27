@@ -43,6 +43,9 @@ ansible-playbook -i inventory.ini playbook.yml
 - Patroni API: 8008
 - etcd client: 2379
 - etcd peer: 2380
+- HAProxy PostgreSQL (master): 5000
+- HAProxy PostgreSQL (replica): 5000
+- HAProxy Statistics: 7000
 
 ### PostgreSQL Settings
 - Version: 16
