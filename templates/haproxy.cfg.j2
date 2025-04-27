@@ -25,14 +25,29 @@ listen stats
     stats realm Strictly\ Private
     stats auth admin:admin
 
-frontend patroni_frontend
+frontend patroni_master
     bind *:5000
     mode tcp
-    default_backend patroni_backend
+    default_backend patroni_master_backend
 
-backend patroni_backend
+frontend patroni_replicas
+    bind *:5001
     mode tcp
-    option httpchk
+    default_backend patroni_replicas_backend
+
+backend patroni_master_backend
+    mode tcp
+    option httpchk GET /master
+    http-check expect status 200
+    default-server inter 3s fall 3 rise 2
+{% for host in groups['promoters'] %}
+    server {{ host }} {{ hostvars[host]['ansible_host'] }}:{{ postgres_port }} check port {{ patroni_port }}
+{% endfor %}
+
+backend patroni_replicas_backend
+    mode tcp
+    balance roundrobin
+    option httpchk GET /replica
     http-check expect status 200
     default-server inter 3s fall 3 rise 2
 {% for host in groups['promoters'] %}
