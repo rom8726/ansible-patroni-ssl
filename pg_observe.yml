@@ -5,8 +5,8 @@
 - hosts: promoters
   become: true
   vars:
-    node_exporter_version: "1.7.0"
-    postgres_exporter_version: "0.14.0"
+    node_exporter_version: "1.9.1"
+    postgres_exporter_version: "0.17.1"
     arch: "linux-amd64"
 
   tasks:
