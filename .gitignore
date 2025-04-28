@@ -1,2 +1,4 @@
 .vscode/
 .idea/
+ansible.cfg
+inventory.ini
