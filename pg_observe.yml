@@ -98,5 +98,5 @@
         port: "{{ item }}"
         proto: tcp
       with_items:
-        - {{ node_exporter_port }}      # node_exporter
-        - {{ postgres_exporter_port }}  # postgres_exporter
+        - "{{ node_exporter_port }}"      # node_exporter
+        - "{{ postgres_exporter_port }}"  # postgres_exporter

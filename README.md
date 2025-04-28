@@ -79,13 +79,13 @@ make pg-observe
 
 ### Monitoring Components
 #### Node Exporter
-- Version: 1.7.0
+- Version: 1.9.1
 - Metrics Port: 9100
 - Systemd Service: node_exporter.service
 - User: node_exporter
 
 #### Postgres Exporter
-- Version: 0.14.0
+- Version: 0.17.1
 - Metrics Port: 9187
 - Systemd Service: postgres_exporter.service
 - User: postgres

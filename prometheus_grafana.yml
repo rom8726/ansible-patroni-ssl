@@ -112,5 +112,5 @@
         port: "{{ item }}"
         proto: tcp
       with_items:
-        - {{ prometheus_port }}  # Prometheus
-        - {{ grafana_port }}     # Grafana
+        - "{{ prometheus_port }}"  # Prometheus
+        - "{{ grafana_port }}"     # Grafana
