@@ -56,6 +56,7 @@ postgresql:
     max-rate: 100M
     checkpoint: fast
   pg_hba:
+    - "host postgres {{ postgresql_superuser_name }} {{ ansible_host }}/32 trust"
     - host replication {{ postgresql_replication_user }} {{ postgresql_replication_network }} {{ postgresql_replication_auth_method }}
 {% if postgresql_additional_pg_hba is defined %}
 {% for rule in postgresql_additional_pg_hba %}
