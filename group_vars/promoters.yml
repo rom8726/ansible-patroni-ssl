@@ -40,6 +40,4 @@ postgresql_custom_parameters:
 
 # Additional pg_hba.conf rules (optional)
 postgresql_additional_pg_hba:
-  - "local all all  trust"
-  - "host postgres postgres 127.0.0.1/32 trust"
-  - "host postgres postgres 0.0.0.0/32 trust"
+  #- "host postgres postgres 10.10.10.10/32 md5"
