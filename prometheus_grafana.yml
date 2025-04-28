@@ -1,0 +1,125 @@
+---
+- hosts: prometheus_grafana
+  become: true
+  vars:
+    prometheus_version: "3.3.0"
+    grafana_version: "11.6.1"
+    prometheus_retention: "30d"
+    prometheus_storage_path: "/var/lib/prometheus"
+    prometheus_config_path: "/etc/prometheus"
+    prometheus_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    grafana_admin_password: "admin"
+
+  tasks:
+    - name: Create prometheus user
+      user:
+        name: prometheus
+        system: yes
+        shell: /sbin/nologin
+
+    - name: Create prometheus directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: '0755'
+      with_items:
+        - "{{ prometheus_storage_path }}"
+        - "{{ prometheus_config_path }}"
+
+    - name: Download and install Prometheus
+      block:
+        - name: Download Prometheus
+          get_url:
+            url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-{{ prometheus_arch }}.tar.gz"
+            dest: /tmp/prometheus.tar.gz
+            mode: '0644'
+
+        - name: Extract Prometheus
+          unarchive:
+            src: /tmp/prometheus.tar.gz
+            dest: /tmp
+            remote_src: yes
+
+        - name: Copy Prometheus binaries
+          copy:
+            src: "/tmp/prometheus-{{ prometheus_version }}.linux-{{ prometheus_arch }}/{{ item }}"
+            dest: "/usr/local/bin/"
+            mode: '0755'
+            remote_src: yes
+          with_items:
+            - prometheus
+            - promtool
+
+    - name: Verify prometheus binary after installation
+      command: /usr/local/bin/prometheus --version
+      register: prometheus_version_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Display prometheus version
+      debug:
+        var: prometheus_version_check.stdout_lines
+      when: prometheus_version_check.rc == 0
+
+    - name: Fail if prometheus binary check failed
+      fail:
+        msg: "Prometheus binary verification failed"
+      when: prometheus_version_check.rc != 0
+
+    - name: Create Prometheus config
+      template:
+        src: templates/prometheus.yml.j2
+        dest: "{{ prometheus_config_path }}/prometheus.yml"
+        owner: prometheus
+        group: prometheus
+        mode: '0644'
+
+    - name: Create Prometheus systemd service
+      template:
+        src: templates/prometheus.service.j2
+        dest: /etc/systemd/system/prometheus.service
+        mode: '0644'
+
+    - name: Add Grafana GPG key
+      apt_key:
+        url: https://apt.grafana.com/gpg.key
+        state: present
+
+    - name: Add Grafana repository
+      apt_repository:
+        repo: "deb https://apt.grafana.com stable main"
+        state: present
+        filename: grafana
+
+    - name: Install Grafana
+      apt:
+        name: grafana
+        update_cache: yes
+        state: present
+
+    - name: Configure Grafana
+      template:
+        src: templates/grafana.ini.j2
+        dest: /etc/grafana/grafana.ini
+        mode: '0644'
+
+    - name: Start and enable services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      with_items:
+        - prometheus
+        - grafana-server
+
+    - name: Allow Prometheus and Grafana ports
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      with_items:
+        - '9090'  # Prometheus
+        - '3000'  # Grafana
