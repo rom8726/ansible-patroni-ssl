@@ -64,6 +64,11 @@ postgresql:
 {% for host in groups['haproxy'] %}
     - host all all {{ hostvars[host]['ansible_host'] }}/32 md5
 {% endfor %}
+{% for host in groups['promoters'] %}
+{% if host != inventory_hostname %}
+    - host all {{ postgresql_superuser_name }} {{ hostvars[host]['ansible_host'] }}/32 md5
+{% endif %}
+{% endfor %}
 {% if postgresql_additional_pg_hba is defined %}
 {% for rule in postgresql_additional_pg_hba %}
     - {{ rule }}
