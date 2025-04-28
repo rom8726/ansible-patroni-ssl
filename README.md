@@ -21,14 +21,16 @@ This Ansible playbook automates the deployment of a PostgreSQL high-availability
 
 ## Quick Start
 1. Clone this repository:
-2. Update inventory.ini with your servers:
+2. Create config files by command `make init`
+3. Update inventory.ini with your servers:
 ```ini
 [promoters]
 patroni1 ansible_host=192.168.64.2 node_id=1
 patroni2 ansible_host=192.168.64.3 node_id=2
 patroni3 ansible_host=192.168.64.4 node_id=3 
 ```
-3. Run the playbooks:
+4. Update ansible.cfg with your user (root by default)
+5. Run the playbooks:
 ```shell
 # Deploy Patroni cluster
 make up
