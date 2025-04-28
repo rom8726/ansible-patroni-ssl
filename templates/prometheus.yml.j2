@@ -5,18 +5,18 @@ global:
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ['localhost:{{ prometheus_port }}']
 
   - job_name: 'node_exporter'
     static_configs:
       - targets:
         {% for host in groups['promoters'] %}
-        - '{{ hostvars[host].ansible_host }}:9100'
+        - '{{ hostvars[host].ansible_host }}:{{ node_exporter_port }}'
         {% endfor %}
 
   - job_name: 'postgres_exporter'
     static_configs:
       - targets:
         {% for host in groups['promoters'] %}
-        - '{{ hostvars[host].ansible_host }}:9187'
+        - '{{ hostvars[host].ansible_host }}:{{ postgres_exporter_port }}'
         {% endfor %}

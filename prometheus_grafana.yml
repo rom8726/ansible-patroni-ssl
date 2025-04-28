@@ -1,15 +1,6 @@
 ---
 - hosts: prometheus_grafana
   become: true
-  vars:
-    prometheus_version: "3.3.0"
-    grafana_version: "11.6.1"
-    prometheus_retention: "30d"
-    prometheus_storage_path: "/var/lib/prometheus"
-    prometheus_config_path: "/etc/prometheus"
-    prometheus_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
-    grafana_admin_password: "admin"
-
   tasks:
     - name: Create prometheus user
       user:
@@ -121,5 +112,5 @@
         port: "{{ item }}"
         proto: tcp
       with_items:
-        - '9090'  # Prometheus
-        - '3000'  # Grafana
+        - {{ prometheus_port }}  # Prometheus
+        - {{ grafana_port }}     # Grafana

@@ -4,11 +4,6 @@
 ---
 - hosts: promoters
   become: true
-  vars:
-    node_exporter_version: "1.9.1"
-    postgres_exporter_version: "0.17.1"
-    arch: "linux-amd64"
-
   tasks:
     - name: Create node_exporter system user
       user:
@@ -103,5 +98,5 @@
         port: "{{ item }}"
         proto: tcp
       with_items:
-        - '9100'  # node_exporter
-        - '9187'  # postgres_exporter
+        - {{ node_exporter_port }}      # node_exporter
+        - {{ postgres_exporter_port }}  # postgres_exporter

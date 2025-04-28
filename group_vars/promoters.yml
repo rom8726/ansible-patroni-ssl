@@ -1,3 +1,12 @@
+# Common versions
+node_exporter_version: "1.9.1"
+postgres_exporter_version: "0.17.1"
+prometheus_version: "3.3.0"
+grafana_version: "11.6.1"
+
+arch: "linux-amd64"
+prometheus_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
 # Common Patroni settings
 patroni_scope: demo
 patroni_api_port: 8008
@@ -40,3 +49,17 @@ postgresql_custom_parameters:
 
 # Additional pg_hba.conf rules (optional)
 #postgresql_additional_pg_hba:
+
+# Prometheus settings
+prometheus_retention: "30d"
+prometheus_storage_path: "/var/lib/prometheus"
+prometheus_config_path: "/etc/prometheus"
+
+# Grafana settings
+grafana_admin_password: "admin"
+
+# Common paths and ports for exporters
+node_exporter_port: 9100
+postgres_exporter_port: 9187
+prometheus_port: 9090
+grafana_port: 3000
