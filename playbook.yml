@@ -49,11 +49,6 @@
         state: stopped
         enabled: no
 
-    - name: Clean data_dir
-      file:
-        path: "{{ data_dir }}"
-        state: absent
-
     - name: Create config Patroni
       template:
         src: patroni.yml.j2
@@ -97,7 +92,7 @@
 
     - name: Install systemd unit for etcd
       template:
-        src: files/etcd.service.j2
+        src: templates/etcd.service.j2
         dest: /etc/systemd/system/etcd.service
         mode: '0644'
 
@@ -161,7 +156,7 @@
 
     - name: Create systemd unit for Patroni
       template:
-        src: files/patroni.service.j2
+        src: templates/patroni.service.j2
         dest: /etc/systemd/system/patroni.service
         mode: '0644'
 
