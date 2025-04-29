@@ -9,14 +9,14 @@
 
   tasks:
     - name: Install dependencies
-      apt:
+      ansible.builtin.apt:
         name:
           - python3-pip
           - python3-psycopg2
           - etcd
           - wget
           - gnupg
-        update_cache: yes
+        update_cache: true
 
     - name: Adding GPG-key PostgreSQL
       ansible.builtin.shell: |
@@ -31,11 +31,11 @@
         filename: "pgdg"
 
     - name: Update apt
-      apt:
-        update_cache: yes
+      ansible.builtin.apt:
+        update_cache: true
 
     - name: Install PostgreSQL {{ pg_version }}
-      apt:
+      ansible.builtin.apt:
         name: postgresql-{{ pg_version }}
         state: present
 
@@ -62,7 +62,7 @@
         owner: postgres
         group: postgres
         mode: '0700'
-        recurse: yes
+        recurse: true
 
     - name: Clean previous state of etcd
       file:
@@ -99,8 +99,8 @@
     - name: Restart etcd
       systemd:
         name: etcd
-        daemon_reload: yes
-        enabled: yes
+        daemon_reload: true
+        enabled: true
         state: started
 
     - name: Start etcd on first node
@@ -109,8 +109,8 @@
         - name: Start etcd on first node
           systemd:
             name: etcd
-            daemon_reload: yes
-            enabled: yes
+            daemon_reload: true
+            enabled: true
             state: started
 
     - name: Wait for first etcd node will start
@@ -130,8 +130,8 @@
       when: inventory_hostname != "patroni1"
       systemd:
         name: etcd
-        daemon_reload: yes
-        enabled: yes
+        daemon_reload: true
+        enabled: true
         state: started
 
     - name: Wait for cluster formation
@@ -177,10 +177,10 @@
 
     - name: Reload systemd
       systemd:
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Enable and start Patroni systemd unit
       systemd:
         name: patroni
         state: started
-        enabled: yes
+        enabled: true
