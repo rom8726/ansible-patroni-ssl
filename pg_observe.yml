@@ -100,3 +100,25 @@
       with_items:
         - "{{ node_exporter_port }}"      # node_exporter
         - "{{ postgres_exporter_port }}"  # postgres_exporter
+
+    - name: Check node_exporter metrics endpoint
+      uri:
+        url: "http://localhost:{{ node_exporter_port }}/metrics"
+        status_code: 200
+        return_content: yes
+      register: node_exporter_metrics
+
+    - name: Validate node_exporter metrics
+      debug:
+        msg: "Node exporter metrics collected successfully: {{ node_exporter_metrics.content | regex_search('node_cpu_seconds_total') is not none }}"
+
+    - name: Check postgres_exporter metrics endpoint
+      uri:
+        url: "http://localhost:{{ postgres_exporter_port }}/metrics"
+        status_code: 200
+        return_content: yes
+      register: postgres_exporter_metrics
+
+    - name: Validate postgres_exporter metrics
+      debug:
+        msg: "Postgres exporter metrics collected successfully: {{ postgres_exporter_metrics.content | regex_search('pg_database_size') is not none }}"
