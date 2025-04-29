@@ -114,3 +114,12 @@
       with_items:
         - "{{ prometheus_port }}"  # Prometheus
         - "{{ grafana_port }}"     # Grafana
+
+  handlers:
+    - name: Restart services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: restarted
+      with_items:
+        - prometheus
+        - grafana-server

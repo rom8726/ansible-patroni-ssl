@@ -1,5 +1,5 @@
 ---
-- name: Install Patroni-cluster
+- name: Install Patroni cluster
   hosts: promoters
   become: true
   vars:

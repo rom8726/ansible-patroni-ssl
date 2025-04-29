@@ -125,3 +125,12 @@
     - name: Validate postgres_exporter metrics
       ansible.builtin.debug:
         msg: "Postgres exporter metrics collected successfully: {{ postgres_exporter_metrics.content | regex_search('pg_database_size') is not none }}"
+
+  handlers:
+    - name: Restart services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: restarted
+      with_items:
+        - node_exporter
+        - postgres_exporter
