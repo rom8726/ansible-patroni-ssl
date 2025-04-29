@@ -19,10 +19,10 @@
         update_cache: true
 
     - name: Adding GPG-key PostgreSQL
-      ansible.builtin.shell: |
-        wget -qO - https://www.postgresql.org/media/keys/ACCC4CF8.asc | tee /etc/apt/trusted.gpg.d/postgresql.asc
-      args:
-        creates: /etc/apt/trusted.gpg.d/postgresql.asc
+      ansible.builtin.get_url:
+        url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        dest: /etc/apt/trusted.gpg.d/postgresql.asc
+        mode: '0644'
 
     - name: Adding apt repository PostgreSQL
       ansible.builtin.apt_repository:
@@ -40,23 +40,23 @@
         state: present
 
     - name: Install patroni
-      pip:
+      ansible.builtin.pip:
         name: patroni[etcd]
 
     - name: Stop PostgreSQL
-      service:
+      ansible.builtin.service:
         name: postgresql
         state: stopped
-        enabled: no
+        enabled: false
 
     - name: Create config Patroni
-      template:
+      ansible.builtin.template:
         src: patroni.yml.j2
         dest: /etc/patroni.yml
         mode: '0644'
 
     - name: Set owner of data directory PostgreSQL
-      file:
+      ansible.builtin.file:
         path: "{{ data_dir }}"
         state: directory
         owner: postgres
@@ -65,13 +65,13 @@
         recurse: true
 
     - name: Clean previous state of etcd
-      file:
+      ansible.builtin.file:
         path: /var/lib/etcd
         state: absent
       when: clean_etcd is defined and clean_etcd
 
     - name: Create directory for etcd data
-      file:
+      ansible.builtin.file:
         path: /var/lib/etcd
         state: directory
         owner: etcd
@@ -79,25 +79,25 @@
         mode: '0700'
 
     - name: Stop etcd if running
-      systemd:
+      ansible.builtin.systemd:
         name: etcd
         state: stopped
-      ignore_errors: true
+      failed_when: false
 
     - name: Generate etcd config
-      template:
+      ansible.builtin.template:
         src: templates/etcd.conf.yml.j2
         dest: /etc/etcd.yml
         mode: '0644'
 
     - name: Install systemd unit for etcd
-      template:
+      ansible.builtin.template:
         src: templates/etcd.service.j2
         dest: /etc/systemd/system/etcd.service
         mode: '0644'
 
     - name: Restart etcd
-      systemd:
+      ansible.builtin.systemd:
         name: etcd
         daemon_reload: true
         enabled: true
@@ -107,35 +107,35 @@
       when: inventory_hostname == "patroni1"
       block:
         - name: Start etcd on first node
-          systemd:
+          ansible.builtin.systemd:
             name: etcd
             daemon_reload: true
             enabled: true
             state: started
 
     - name: Wait for first etcd node will start
-      wait_for:
+      ansible.builtin.wait_for:
         host: "{{ ansible_host }}"
         port: 2379
         timeout: 30
 
     - name: Wait for the first node to be ready
       when: inventory_hostname != "patroni1"
-      wait_for:
+      ansible.builtin.wait_for:
         host: "{{ hostvars['patroni1']['ansible_host'] }}"
         port: 2379
         timeout: 30
 
     - name: Launching other etcd nodes
       when: inventory_hostname != "patroni1"
-      systemd:
+      ansible.builtin.systemd:
         name: etcd
         daemon_reload: true
         enabled: true
         state: started
 
     - name: Wait for cluster formation
-      shell: |
+      ansible.builtin.shell: |
         timeout 30 bash -c 'until etcdctl --endpoints=http://{{ ansible_host }}:2379 cluster-health; do sleep 5; done'
       register: cluster_health
       until: cluster_health.rc == 0
@@ -143,25 +143,25 @@
       delay: 5
 
     - name: Check cluster state
-      shell: |
+      ansible.builtin.shell: |
         etcdctl --endpoints=http://{{ ansible_host }}:2379 member list
       register: etcd_members
       changed_when: false
 
     - name: Create patroni logs directory
-      file:
+      ansible.builtin.file:
         path: /var/log/patroni
         state: directory
         mode: '0755'
 
     - name: Create systemd unit for Patroni
-      template:
+      ansible.builtin.template:
         src: templates/patroni.service.j2
         dest: /etc/systemd/system/patroni.service
         mode: '0644'
 
     - name: Create config for patroni logrotate
-      copy:
+      ansible.builtin.copy:
         dest: /etc/logrotate.d/patroni
         mode: '0644'
         content: |
@@ -176,11 +176,11 @@
           }
 
     - name: Reload systemd
-      systemd:
+      ansible.builtin.systemd:
         daemon_reload: true
 
     - name: Enable and start Patroni systemd unit
-      systemd:
+      ansible.builtin.systemd:
         name: patroni
         state: started
         enabled: true
