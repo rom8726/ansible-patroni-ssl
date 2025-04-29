@@ -29,9 +29,9 @@ postgresql_bin_dir: "/usr/lib/postgresql/{{ postgresql_version }}/bin"
 
 # PostgreSQL users
 postgresql_superuser_name: postgres
-postgresql_superuser_password: "password"
+postgresql_superuser_password: password
 postgresql_replication_user: replicator
-postgresql_replication_password: "password"
+postgresql_replication_password: password
 postgresql_replication_auth_method: md5
 
 # PostgreSQL params
