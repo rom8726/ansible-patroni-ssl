@@ -32,7 +32,6 @@ postgresql_superuser_name: postgres
 postgresql_superuser_password: "password"
 postgresql_replication_user: replicator
 postgresql_replication_password: "password"
-postgresql_replication_network: "0.0.0.0/0"
 postgresql_replication_auth_method: md5
 
 # PostgreSQL params

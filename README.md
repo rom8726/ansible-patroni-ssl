@@ -75,7 +75,6 @@ make pg-observe
 ⚠️ Change these values:
 - PostgreSQL superuser: postgres/password
 - Replication user: replicator/password
-- Replication access: 0.0.0.0/0 (all hosts)
 
 ### Monitoring Components
 #### Node Exporter
@@ -116,7 +115,6 @@ make pg-observe
 This deployment includes several configurations that are NOT suitable for production:
 - Basic default passwords
 - Non-encrypted connections
-- Open network access (0.0.0.0/0)
 - Root SSH access
 - No SSL/TLS configuration
 - No firewall setup
