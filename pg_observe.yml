@@ -17,7 +17,8 @@
       block:
         - name: Download node_exporter
           ansible.builtin.get_url:
-            url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.{{ arch }}.tar.gz"
+            url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/\
+            node_exporter-{{ node_exporter_version }}.{{ arch }}.tar.gz"
             dest: /tmp/node_exporter.tar.gz
             mode: '0644'
 
@@ -38,7 +39,8 @@
       block:
         - name: Download postgres_exporter
           ansible.builtin.get_url:
-            url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_version }}/postgres_exporter-{{ postgres_exporter_version }}.{{ arch }}.tar.gz"
+            url: "https://github.com/prometheus-community/postgres_exporter/releases/download/\
+            v{{ postgres_exporter_version }}/postgres_exporter-{{ postgres_exporter_version }}.{{ arch }}.tar.gz"
             dest: /tmp/postgres_exporter.tar.gz
             mode: '0644'
 

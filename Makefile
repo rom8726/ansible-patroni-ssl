@@ -56,3 +56,10 @@ check-metrics.postgres-exporter: init
 
 .PHONY: check-metrics
 check-metrics: check-metrics.node-exporter check-metrics.postgres-exporter
+
+.PHONY: lint
+lint:
+	ansible-lint playbook.yml
+	ansible-lint haproxy.yml
+	ansible-lint pg_observe.yml
+	ansible-lint prometheus_grafana.yml

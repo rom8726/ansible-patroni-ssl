@@ -1,15 +1,16 @@
 ---
-- hosts: prometheus_grafana
+- name: Install Prometheus and Grafana
+  hosts: prometheus_grafana
   become: true
   tasks:
     - name: Create prometheus user
-      user:
+      ansible.builtin.user:
         name: prometheus
-        system: yes
+        system: true
         shell: /sbin/nologin
 
     - name: Create prometheus directories
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         owner: prometheus
@@ -19,48 +20,47 @@
         - "{{ prometheus_storage_path }}"
         - "{{ prometheus_config_path }}"
 
-    - name: Download and install Prometheus
-      block:
-        - name: Download Prometheus
-          get_url:
-            url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-{{ prometheus_arch }}.tar.gz"
-            dest: /tmp/prometheus.tar.gz
-            mode: '0644'
+    - name: Download Prometheus
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/\
+        prometheus-{{ prometheus_version }}.linux-{{ prometheus_arch }}.tar.gz"
+        dest: /tmp/prometheus.tar.gz
+        mode: '0644'
 
-        - name: Extract Prometheus
-          unarchive:
-            src: /tmp/prometheus.tar.gz
-            dest: /tmp
-            remote_src: yes
+    - name: Extract Prometheus
+      ansible.builtin.unarchive:
+        src: /tmp/prometheus.tar.gz
+        dest: /tmp
+        remote_src: true
 
-        - name: Copy Prometheus binaries
-          copy:
-            src: "/tmp/prometheus-{{ prometheus_version }}.linux-{{ prometheus_arch }}/{{ item }}"
-            dest: "/usr/local/bin/"
-            mode: '0755'
-            remote_src: yes
-          with_items:
-            - prometheus
-            - promtool
+    - name: Copy Prometheus binaries
+      ansible.builtin.copy:
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-{{ prometheus_arch }}/{{ item }}"
+        dest: "/usr/local/bin/"
+        mode: '0755'
+        remote_src: true
+      with_items:
+        - prometheus
+        - promtool
 
     - name: Verify prometheus binary after installation
-      command: /usr/local/bin/prometheus --version
+      ansible.builtin.command: /usr/local/bin/prometheus --version
       register: prometheus_version_check
       changed_when: false
       ignore_errors: true
 
     - name: Display prometheus version
-      debug:
+      ansible.builtin.debug:
         var: prometheus_version_check.stdout_lines
       when: prometheus_version_check.rc == 0
 
     - name: Fail if prometheus binary check failed
-      fail:
+      ansible.builtin.fail:
         msg: "Prometheus binary verification failed"
       when: prometheus_version_check.rc != 0
 
     - name: Create Prometheus config
-      template:
+      ansible.builtin.template:
         src: templates/prometheus.yml.j2
         dest: "{{ prometheus_config_path }}/prometheus.yml"
         owner: prometheus
@@ -68,46 +68,46 @@
         mode: '0644'
 
     - name: Create Prometheus systemd service
-      template:
+      ansible.builtin.template:
         src: templates/prometheus.service.j2
         dest: /etc/systemd/system/prometheus.service
         mode: '0644'
 
     - name: Add Grafana GPG key
-      apt_key:
+      ansible.builtin.apt_key:
         url: https://apt.grafana.com/gpg.key
         state: present
 
     - name: Add Grafana repository
-      apt_repository:
+      ansible.builtin.apt_repository:
         repo: "deb https://apt.grafana.com stable main"
         state: present
         filename: grafana
 
     - name: Install Grafana
-      apt:
+      ansible.builtin.apt:
         name: grafana
-        update_cache: yes
+        update_cache: true
         state: present
 
     - name: Configure Grafana
-      template:
+      ansible.builtin.template:
         src: templates/grafana.ini.j2
         dest: /etc/grafana/grafana.ini
         mode: '0644'
 
     - name: Start and enable services
-      systemd:
+      ansible.builtin.systemd:
         name: "{{ item }}"
         state: started
-        enabled: yes
-        daemon_reload: yes
+        enabled: true
+        daemon_reload: true
       with_items:
         - prometheus
         - grafana-server
 
     - name: Allow Prometheus and Grafana ports
-      ufw:
+      community.general.ufw:
         rule: allow
         port: "{{ item }}"
         proto: tcp
