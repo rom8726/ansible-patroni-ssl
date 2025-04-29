@@ -9,27 +9,27 @@
 
   tasks:
     - name: Install HAProxy
-      apt:
+      ansible.builtin.apt:
         name: haproxy
         state: present
-        update_cache: yes
+        update_cache: true
 
     - name: Create HAProxy configuration
-      template:
+      ansible.builtin.template:
         src: templates/haproxy.cfg.j2
         dest: "{{ haproxy_config }}"
         mode: '0644'
       notify: Restart HAProxy
 
     - name: Enable and start HAProxy
-      systemd:
+      ansible.builtin.systemd:
         name: haproxy
         state: started
-        enabled: yes
-        daemon_reload: yes
+        enabled: true
+        daemon_reload: true
 
   handlers:
     - name: Restart HAProxy
-      systemd:
+      ansible.builtin.systemd:
         name: haproxy
         state: restarted
