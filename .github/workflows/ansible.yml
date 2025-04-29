@@ -28,4 +28,4 @@ jobs:
           pip install ansible ansible-lint
 
       - name: Run ansible-lint
-        run: ansible-lint playbook.yml
+        run: make lint
