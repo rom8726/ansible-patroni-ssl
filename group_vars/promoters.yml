@@ -59,7 +59,7 @@ pgbouncer_listen_port: 6432
 haproxy_config: "/etc/haproxy/haproxy.cfg"
 
 # Cluster variables
-cluster_vip_1: "192.168.64.100"
+cluster_vip_1: 192.168.64.100
 
 # Prometheus settings
 prometheus_retention: "30d"
