@@ -1,0 +1,2 @@
+keepalived_vip_interface: enp0s1
+keepalived_auth_pass: mypassword
