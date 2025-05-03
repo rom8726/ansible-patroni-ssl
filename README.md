@@ -41,7 +41,9 @@ patroni2 ansible_host=192.168.64.3 node_id=2
 patroni3 ansible_host=192.168.64.4 node_id=3 
 ```
 4. Update `ansible.cfg` with your user (root by default).
-5. Run the playbooks:
+5. Set variable `cluster_vip_1` in group_vars (some VIP address for keepalived).
+6. Set variable `keepalived_vip_interface` in keepalived default vars.
+7. Run the playbooks:
 ```shell
 # Deploy Patroni cluster
 make up
