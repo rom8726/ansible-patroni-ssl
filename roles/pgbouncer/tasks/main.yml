@@ -18,9 +18,9 @@
     system: true
     state: present
 
-- name: Ensure /var/run/pgbouncer directory exists
+- name: Ensure /run/pgbouncer directory exists
   ansible.builtin.file:
-    path: /var/run/pgbouncer
+    path: /run/pgbouncer
     state: directory
     owner: pgbouncer
     group: pgbouncer
