@@ -9,7 +9,7 @@ ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 User=pgbouncer
 Group=pgbouncer
-PIDFile=/run/pgbouncer/pgbouncer.pid
+PIDFile=/run/pgbouncer.pid
 StandardOutput=append:/var/log/pgbouncer/pgbouncer.log
 StandardError=append:/var/log/pgbouncer/pgbouncer.log
 
