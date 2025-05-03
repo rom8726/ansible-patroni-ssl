@@ -9,7 +9,9 @@ ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 User=pgbouncer
 Group=pgbouncer
-PIDFile=/run/pgbouncer.pid
+RuntimeDirectory=pgbouncer
+RuntimeDirectoryMode=0755
+PIDFile=/run/pgbouncer/pgbouncer.pid
 StandardOutput=append:/var/log/pgbouncer/pgbouncer.log
 StandardError=append:/var/log/pgbouncer/pgbouncer.log
 
