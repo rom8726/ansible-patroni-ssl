@@ -62,10 +62,8 @@ postgresql:
     - host all {{ postgresql_superuser_name }} {{ ansible_host }}/32 trust
     - host replication {{ postgresql_replication_user }} 127.0.0.1/32 {{ postgresql_replication_auth_method }}
 {% for host in groups['promoters'] %}
-{% if host != inventory_hostname %}
     - host replication {{ postgresql_replication_user }} {{ hostvars[host]['ansible_host'] }}/32 {{ postgresql_replication_auth_method }}
     - host all {{ postgresql_superuser_name }} {{ hostvars[host]['ansible_host'] }}/32 md5
-{% endif %}
 {% endfor %}
 {% if postgresql_additional_pg_hba is defined %}
 {% for rule in postgresql_additional_pg_hba %}

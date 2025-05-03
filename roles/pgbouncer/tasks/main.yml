@@ -40,6 +40,12 @@
     dest: /etc/pgbouncer/pgbouncer.ini
     mode: '0644'
 
+- name: Create userlist.txt
+  ansible.builtin.template:
+    src: userlist.txt.j2
+    dest: /etc/pgbouncer/userlist.txt
+    mode: '0600'
+
 - name: Ensure correct ownership of /etc/pgbouncer/userlist.txt
   ansible.builtin.file:
     path: /etc/pgbouncer/userlist.txt
