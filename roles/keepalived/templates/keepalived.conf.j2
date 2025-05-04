@@ -2,6 +2,7 @@ global_defs {
    router_id ocp_vrrp
    enable_script_security
    script_user root
+   log_file /var/log/keepalived.log
 }
 
 vrrp_script chk_patroni_leader {

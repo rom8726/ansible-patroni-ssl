@@ -40,6 +40,32 @@
     dest: /etc/systemd/system/etcd.service
     mode: '0644'
 
+- name: Ensure logrotate is installed
+  ansible.builtin.apt:
+    name: logrotate
+    state: present
+
+- name: Create logrotate configuration for etcd
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/etcd
+    content: |
+      /var/log/etcd.log {
+          daily
+          rotate 7
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0640 root root
+          sharedscripts
+          postrotate
+              systemctl reload etcd > /dev/null 2>/dev/null || true
+          endscript
+      }
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Restart etcd
   ansible.builtin.systemd:
     name: etcd

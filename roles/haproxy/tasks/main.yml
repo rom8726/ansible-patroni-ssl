@@ -10,6 +10,47 @@
     dest: "{{ haproxy_config }}"
     mode: '0644'
 
+- name: Configure rsyslog for HAProxy
+  ansible.builtin.copy:
+    dest: /etc/rsyslog.d/haproxy.conf
+    content: |
+      if $programname == 'haproxy' then /var/log/haproxy.log
+      & stop
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Restart rsyslog to apply configuration for HAProxy logging
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted
+    enabled: true
+
+- name: Ensure logrotate is installed
+  ansible.builtin.apt:
+    name: logrotate
+    state: present
+
+- name: Create logrotate configuration for haproxy
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/haproxy
+    content: |
+      /var/log/haproxy.log {
+          daily
+          rotate 7
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0640 root root
+          postrotate
+              systemctl reload haproxy > /dev/null 2>/dev/null || true
+          endscript
+      }
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Enable and start HAProxy
   ansible.builtin.systemd:
     name: haproxy

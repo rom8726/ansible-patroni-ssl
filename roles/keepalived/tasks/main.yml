@@ -61,6 +61,52 @@
     owner: root
     group: root
 
+- name: Ensure logrotate is installed
+  ansible.builtin.apt:
+    name: logrotate
+    state: present
+
+- name: Configure rsyslog for keepalived
+  ansible.builtin.copy:
+    dest: /etc/rsyslog.d/keepalived.conf
+    content: |
+      if $programname == 'keepalived' then /var/log/keepalived.log
+      & stop
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create logrotate configuration for keepalived
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/keepalived
+    content: |
+      /var/log/keepalived.log {
+          daily
+          rotate 7
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0640 root root
+          sharedscripts
+          postrotate
+              systemctl reload keepalived > /dev/null 2>/dev/null || true
+          endscript
+      }
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure keepalived logs to /var/log/keepalived.log
+  ansible.builtin.lineinfile:
+    path: /etc/keepalived/keepalived.conf
+    regexp: '^log_file'
+    line: 'log_file /var/log/keepalived.log'
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+
 - name: Enable and start keepalived
   ansible.builtin.systemd:
     name: keepalived
