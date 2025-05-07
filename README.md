@@ -11,7 +11,7 @@ This Ansible playbook automates the deployment of a PostgreSQL high-availability
   
 The connection path:
 ```
-Keepalived VIP -> HAProxy -> PgBouncer -> PostgreSQL
+Client -> Keepalived VIP -> HAProxy -> PgBouncer -> PostgreSQL
 ```
 
 ## Prerequisites
