@@ -1,6 +1,8 @@
 # ansible-patroni
 Ansible playbook for deploying PostgreSQL Patroni cluster
 
+[![boosty-cozy](https://gideonwhite1029.github.io/badges/cozy-boosty_vector.svg)](https://boosty.to/dev-tools-hacker)
+
 ⚠️ **WARNING: This configuration is for testing/development purposes only. DO NOT use in production without proper security hardening!**
 
 ## Overview
