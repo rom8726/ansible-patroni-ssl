@@ -126,3 +126,21 @@
 - name: Display Patroni certificate info
   ansible.builtin.debug:
     var: patroni_cert_info.stdout_lines
+
+- name: Wait for PostgreSQL to be ready
+  ansible.builtin.wait_for:
+    port: "{{ postgresql_port }}"
+    host: "{{ ansible_host }}"
+    delay: 10
+    timeout: 60
+
+- name: Create pma_user if not exists
+  ansible.builtin.postgresql_user:
+    login_host: "{{ ansible_host }}"
+    login_user: "{{ postgresql_superuser_name }}"
+    login_password: "{{ postgresql_superuser_password }}"
+    name: pma_user
+    password: "{{ postgresql_pma_user_password }}"
+    role_attr_flags: "SUPERUSER"
+    state: present
+  when: inventory_hostname == groups['promoters'][0]  # Only run on first node
