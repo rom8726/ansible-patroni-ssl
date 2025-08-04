@@ -22,6 +22,7 @@ etcd_clean_data: false
 
 # PostgreSQL settings
 clean_postgresql: false
+postgresql_clean_data: false
 
 # PostgreSQL settigns
 pg_version: 16

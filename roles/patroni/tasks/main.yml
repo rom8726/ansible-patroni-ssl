@@ -51,7 +51,13 @@
   ansible.builtin.file:
     path: "{{ data_dir }}"
     state: absent
-  when: clean_postgresql is defined and clean_postgresql | bool
+  when: postgresql_clean_data is defined and postgresql_clean_data | bool
+
+- name: Clean Patroni data from etcd if needed
+  ansible.builtin.shell: |
+    etcdctl --endpoints=http://{{ ansible_host }}:2379 rm /service/{{ patroni_scope }} --recursive
+  ignore_errors: true
+  when: postgresql_clean_data is defined and postgresql_clean_data | bool
 
 - name: Set owner of data directory PostgreSQL
   ansible.builtin.file:

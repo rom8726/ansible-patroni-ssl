@@ -144,6 +144,39 @@ Main variables in `group_vars/promoters.yml`:
 - `etcd_client_port`: etcd port
 - `clean_etcd`: clean etcd data on deployment
 
+## Troubleshooting
+
+### Common Issues
+
+#### System ID Mismatch Error
+If you encounter "system ID mismatch" error during PostgreSQL deployment:
+
+```bash
+# Quick fix using the provided script
+./scripts/clean_postgresql.sh patroni1 patroni2 patroni3
+
+# Or manually:
+# 1. Set postgresql_clean_data: true in group_vars/promoters.yml
+# 2. Run: ansible-playbook -i inventory.ini playbook.yml --tags patroni
+```
+
+#### Etcd Connection Issues
+If etcd cluster is not responding:
+
+```bash
+# Quick fix using the provided script
+./scripts/clean_etcd.sh patroni1 patroni2 patroni3
+
+# Or manually:
+# 1. Set etcd_clean_data: true in group_vars/promoters.yml
+# 2. Run: ansible-playbook -i inventory.ini playbook.yml --tags etcd
+```
+
+### Documentation
+
+- [Etcd Deployment Guide](ETCD_DEPLOYMENT.md)
+- [PostgreSQL Deployment Guide](POSTGRESQL_DEPLOYMENT.md)
+
 ## Requirements
 
 - Ubuntu/Debian
