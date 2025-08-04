@@ -4,11 +4,38 @@
     state: present
     update_cache: true
 
+- name: Check if SSL certificates exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: ssl_cert_check
+  loop:
+    - /etc/haproxy/certs/patroni.pem
+    - /etc/haproxy/certs/ca.crt
+
+- name: Wait for Patroni to be ready
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: "{{ patroni_api_port }}"
+    timeout: 60
+    delay: 5
+
+- name: Check if all SSL certificates exist
+  ansible.builtin.set_fact:
+    ssl_certs_ready: "{{ ssl_cert_check.results | selectattr('stat.exists', 'equalto', true) | list | length == 2 }}"
+
 - name: Create HAProxy configuration
   ansible.builtin.template:
     src: haproxy.cfg.j2
     dest: "{{ haproxy_config }}"
     mode: '0644'
+  when: ssl_certs_ready
+
+- name: Create HAProxy configuration without SSL
+  ansible.builtin.template:
+    src: haproxy_no_ssl.cfg.j2
+    dest: "{{ haproxy_config }}"
+    mode: '0644'
+  when: not ssl_certs_ready
 
 - name: Configure rsyslog for HAProxy
   ansible.builtin.copy:
@@ -50,6 +77,11 @@
     owner: root
     group: root
     mode: '0644'
+
+- name: Validate HAProxy configuration
+  ansible.builtin.command: haproxy -c -f {{ haproxy_config }}
+  register: haproxy_config_check
+  failed_when: haproxy_config_check.rc != 0
 
 - name: Enable and start HAProxy
   ansible.builtin.systemd:

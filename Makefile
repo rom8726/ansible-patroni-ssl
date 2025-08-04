@@ -1,54 +1,59 @@
-.PHONY: init
-init:
-	@test -f inventory.ini || cp inventory.ini.example inventory.ini
-	@test -f ansible.cfg || cp ansible.cfg.example ansible.cfg
+.PHONY: help deploy check test clean
 
-.PHONY: up
-up: init
+help: ## Show help
+	@echo "Available commands:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+deploy: ## Deploy cluster
 	ansible-playbook -i inventory.ini playbook.yml
 
-.PHONY: up-with-clean-etcd
-up-with-clean-etcd: init
-	ansible-playbook -i inventory.ini playbook.yml -e "clean_etcd=true"
+deploy-etcd: ## Deploy only etcd
+	ansible-playbook -i inventory.ini playbook.yml --tags etcd
 
-.PHONY: prometheus-grafana
-prometheus-grafana: init
-	ansible-playbook -i inventory.ini prometheus_grafana.yml
+deploy-patroni: ## Deploy only Patroni
+	ansible-playbook -i inventory.ini playbook.yml --tags patroni
 
-.PHONY: haproxy.check.master
-haproxy.check.master: init
-	@PGPASSWORD=`grep postgresql_superuser_password group_vars/promoters.yml | awk '{print $$2}'` && \
-	ANSIBLE_HOST=`grep cluster_vip_1 group_vars/promoters.yml | awk '{print $$2}'` && \
-	PGPASSWORD=$$PGPASSWORD psql -h $$ANSIBLE_HOST -p 5000 -U postgres -c "SELECT pg_is_in_recovery()" | grep -q 'f' && \
-	echo "HAProxy master is OK" || echo "HAProxy master check failed"
+deploy-certs: ## Deploy only certificates
+	ansible-playbook -i inventory.ini playbook.yml --tags certificates
 
-.PHONY: haproxy.check.slave
-haproxy.check.slave: init
-	@PGPASSWORD=`grep postgresql_superuser_password group_vars/promoters.yml | awk '{print $$2}'` && \
-	ANSIBLE_HOST=`grep cluster_vip_1 group_vars/promoters.yml | awk '{print $$2}'` && \
-	PGPASSWORD=$$PGPASSWORD psql -h $$ANSIBLE_HOST -p 5001 -U postgres -c "SELECT pg_is_in_recovery()" | grep -q 't' && \
-	echo "HAProxy slave is OK" || echo "HAProxy slave check failed"
+deploy-core: ## Deploy core components (certs, etcd, patroni)
+	ansible-playbook -i inventory.ini playbook.yml --tags certificates,etcd,patroni
 
-.PHONY: haproxy.check
-haproxy.check: haproxy.check.master haproxy.check.slave
+deploy-pgbouncer: ## Deploy only PgBouncer
+	ansible-playbook -i inventory.ini playbook.yml --tags pgbouncer
 
-.PHONY: check-metrics.node-exporter
-check-metrics.node-exporter: init
-	@NODE_EXPORTER_PORT=9100 && \
-	HOST=`grep patroni1 inventory.ini | awk '{print $$2}' | sed 's/ansible_host=//'` && \
-	curl -sf http://$$HOST:$$NODE_EXPORTER_PORT/metrics | grep -q 'node_cpu_seconds_total' && \
-	echo "Node exporter metrics collected successfully" || echo "Node exporter metrics check failed!"
+deploy-haproxy: ## Deploy only HAProxy
+	ansible-playbook -i inventory.ini playbook.yml --tags haproxy
 
-.PHONY: check-metrics.postgres-exporter
-check-metrics.postgres-exporter: init
-	@POSTGRES_EXPORTER_PORT=9187 && \
-	HOST=`grep patroni1 inventory.ini | awk '{print $$2}' | sed 's/ansible_host=//'` && \
-	curl -sf http://$$HOST:$$POSTGRES_EXPORTER_PORT/metrics | grep -q 'pg_database_size' && \
-	echo "Postgres exporter metrics collected successfully" || echo "Postgres exporter metrics check failed!"
+deploy-keepalived: ## Deploy only Keepalived
+	ansible-playbook -i inventory.ini playbook.yml --tags keepalived
 
-.PHONY: check-metrics
-check-metrics: check-metrics.node-exporter check-metrics.postgres-exporter
+deploy-nginx: ## Deploy only Nginx
+	ansible-playbook -i inventory.ini playbook.yml --tags nginx
 
-.PHONY: lint
-lint:
-	find . -name "*.yml" -exec ansible-lint {} \;
+deploy-ha: ## Deploy HA components (pgbouncer, haproxy, keepalived, nginx)
+	ansible-playbook -i inventory.ini playbook.yml --tags pgbouncer,haproxy,keepalived,nginx
+
+check: ## Check cluster status
+	ansible-playbook -i inventory.ini playbook.yml --tags etcd,patroni
+
+test: ## Run tests
+	@echo "Copying certificates..."
+	./scripts/copy_certificates.sh 192.168.64.11 root
+	@echo "Testing SSL connections..."
+	./scripts/test_patroni_ssl.sh 192.168.64.11 8008
+	@echo "Testing Nginx SSL connections..."
+	./scripts/test_nginx_ssl.sh 192.168.64.11 9443
+
+debug-etcd: ## etcd diagnostics
+	./scripts/debug_etcd.sh 192.168.64.11 root
+
+clean: ## Clean temporary files
+	rm -rf tmp/
+	rm -rf .ansible/
+
+clean-etcd: ## Clean etcd data
+	ansible-playbook -i inventory.ini playbook.yml --tags etcd -e 'clean_etcd=true'
+
+clean-postgresql: ## Clean PostgreSQL data
+	ansible-playbook -i inventory.ini playbook.yml --tags patroni -e 'clean_postgresql=true'

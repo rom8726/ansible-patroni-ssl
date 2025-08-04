@@ -4,7 +4,11 @@ name: {{ inventory_hostname }}
 restapi:
   listen: 0.0.0.0:{{ patroni_api_port }}
   connect_address: {{ ansible_host }}:{{ patroni_api_port }}
-  allowlist: 127.0.0.1/32,{{ ansible_host }}/32{% for host in groups['promoters'] %},{{ hostvars[host]['ansible_host'] }}/32{% endfor %}
+  certfile: /etc/patroni/certs/patroni.crt
+  keyfile: /etc/patroni/certs/patroni.key
+  cafile: /etc/patroni/certs/root.crt
+  verify_client: false
+  verify_server: false
 
 etcd:
   hosts: {% for host in groups['promoters'] %}{{ hostvars[host]['ansible_host'] }}:{{ etcd_client_port }}{% if not loop.last %},{% endif %}{% endfor %}
@@ -51,9 +55,9 @@ postgresql:
     hot_standby: "on"
     shared_preload_libraries: {{ postgresql_shared_preload_libraries }}
     ssl: 'on'
-    ssl_cert_file: '/etc/postgresql/certs/server.crt'
-    ssl_key_file: '/etc/postgresql/certs/server.key'
-    ssl_ca_file: '/etc/postgresql/certs/root.crt'
+    ssl_cert_file: 'certs/server.crt'
+    ssl_key_file: 'certs/server.key'
+    ssl_ca_file: 'certs/root.crt'
     ssl_crl_file: ''
     ssl_prefer_server_ciphers: '{{ postgresql_ssl_prefer_server_ciphers }}'
     ssl_min_protocol_version: '{{ postgresql_ssl_min_protocol }}'
@@ -72,18 +76,14 @@ postgresql:
     - hostssl all postgres 127.0.0.1/32 md5
     - hostssl all postgres 0.0.0.0/32 md5
     - host postgres {{ postgresql_superuser_name }} {{ ansible_host }}/32 trust
-    - hostssl all pma_user {{ ansible_host }}/32 md5
+    - hostssl postgres pma_user {{ ansible_host }}/32 md5
     - hostssl replication {{ postgresql_replication_user }} 127.0.0.1/32 {{ postgresql_replication_auth_method }}
 {% for host in groups['promoters'] %}
     - hostssl replication {{ postgresql_replication_user }} {{ hostvars[host]['ansible_host'] }}/32 {{ postgresql_replication_auth_method }}
     - hostssl all {{ postgresql_superuser_name }} {{ hostvars[host]['ansible_host'] }}/32 md5
 {% endfor %}
-{% for network in external_networks %}
-    - hostssl all {{ postgresql_superuser_name }} {{ network }} md5
-    - hostssl all pma_user {{ network }} md5
-{% endfor %}
 {% if postgresql_additional_pg_hba is defined %}
 {% for rule in postgresql_additional_pg_hba %}
     - {{ rule }}
 {% endfor %}
-{% endif %}
+{% endif %} 

@@ -4,117 +4,98 @@
       - etcd
     update_cache: true
 
-- name: Update apt
-  ansible.builtin.apt:
-    update_cache: true
-
-- name: Clean previous state of etcd
+- name: Create etcd configuration directory
   ansible.builtin.file:
-    path: /var/lib/etcd
-    state: absent
-  when: clean_etcd is defined and clean_etcd
+    path: /etc/etcd
+    state: directory
+    mode: '0755'
 
-- name: Create directory for etcd data
+- name: Create etcd data directory
   ansible.builtin.file:
     path: /var/lib/etcd
     state: directory
+    mode: '0755'
     owner: etcd
     group: etcd
-    mode: '0700'
 
-- name: Stop etcd if running
-  ansible.builtin.systemd:
-    name: etcd
-    state: stopped
-  failed_when: false
+- name: Clean etcd data directory if requested
+  ansible.builtin.file:
+    path: /var/lib/etcd
+    state: absent
+  when: etcd_clean_data | bool
+  notify: restart etcd
 
-- name: Generate etcd config
+- name: Recreate etcd data directory after cleanup
+  ansible.builtin.file:
+    path: /var/lib/etcd
+    state: directory
+    mode: '0755'
+    owner: etcd
+    group: etcd
+  when: etcd_clean_data | bool
+
+- name: Configure etcd
   ansible.builtin.template:
     src: etcd.conf.yml.j2
-    dest: /etc/etcd.yml
+    dest: /etc/etcd/etcd.conf.yml
     mode: '0644'
+    owner: etcd
+    group: etcd
+  notify: restart etcd
 
-- name: Install systemd unit for etcd
+- name: Configure etcd systemd service
   ansible.builtin.template:
     src: etcd.service.j2
     dest: /etc/systemd/system/etcd.service
     mode: '0644'
+  notify: restart etcd
 
-- name: Ensure logrotate is installed
-  ansible.builtin.apt:
-    name: logrotate
-    state: present
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
 
-- name: Create logrotate configuration for etcd
-  ansible.builtin.copy:
-    dest: /etc/logrotate.d/etcd
-    content: |
-      /var/log/etcd.log {
-          daily
-          rotate 7
-          compress
-          delaycompress
-          missingok
-          notifempty
-          create 0640 root root
-          sharedscripts
-          postrotate
-              systemctl reload etcd > /dev/null 2>/dev/null || true
-          endscript
-      }
-    owner: root
-    group: root
-    mode: '0644'
-
-- name: Restart etcd
+- name: Start and enable etcd service
   ansible.builtin.systemd:
     name: etcd
-    daemon_reload: true
-    enabled: true
     state: started
+    enabled: true
 
-- name: Start etcd on first node
-  when: inventory_hostname == "patroni1"
-  block:
-    - name: Start etcd on first node
-      ansible.builtin.systemd:
-        name: etcd
-        daemon_reload: true
-        enabled: true
-        state: started
-
-- name: Wait for first etcd node will start
+- name: Wait for etcd to be ready
   ansible.builtin.wait_for:
+    port: 2379
     host: "{{ ansible_host }}"
-    port: 2379
-    timeout: 30
+    delay: 10
+    timeout: 60
 
-- name: Wait for the first node to be ready
-  when: inventory_hostname != "patroni1"
-  ansible.builtin.wait_for:
-    host: "{{ hostvars['patroni1']['ansible_host'] }}"
-    port: 2379
-    timeout: 30
-
-- name: Launching other etcd nodes
-  when: inventory_hostname != "patroni1"
+- name: Check if etcd is already running
   ansible.builtin.systemd:
     name: etcd
-    daemon_reload: true
-    enabled: true
-    state: started
+  register: etcd_status
 
-- name: Wait for cluster formation
+- name: Display etcd status
+  ansible.builtin.debug:
+    msg: "etcd on {{ inventory_hostname }}: {{ etcd_status.status.ActiveState }}"
+
+- name: Check etcd cluster health
   ansible.builtin.shell: |
-    timeout 30 bash -c 'until etcdctl --endpoints=http://{{ ansible_host }}:2379 cluster-health; do sleep 5; done'
+    etcdctl --endpoints=http://{{ ansible_host }}:2379 cluster-health
   register: cluster_health
-  until: cluster_health.rc == 0
-  retries: 10
-  delay: 5
-  # noqa no-changed-when
+  changed_when: false
+  when: etcd_status.status.ActiveState == "active"
 
-- name: Check cluster state
+- name: Display cluster health
+  ansible.builtin.debug:
+    msg: "{{ cluster_health.stdout_lines }}"
+  when: etcd_status.status.ActiveState == "active"
+
+- name: List etcd members
   ansible.builtin.shell: |
     etcdctl --endpoints=http://{{ ansible_host }}:2379 member list
-  register: etcd_members
+  register: member_list
   changed_when: false
+  when: etcd_status.status.ActiveState == "active"
+
+- name: Display member list
+  ansible.builtin.debug:
+    msg: "{{ member_list.stdout_lines }}"
+  when: etcd_status.status.ActiveState == "active"

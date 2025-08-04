@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=notify
-ExecStart=/usr/bin/etcd --config-file /etc/etcd.yml
+ExecStart=/usr/bin/etcd --config-file /etc/etcd/etcd.conf.yml
 Restart=always
 LimitNOFILE=40000
 StandardOutput=append:/var/log/etcd.log

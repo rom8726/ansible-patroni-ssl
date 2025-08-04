@@ -1,0 +1,266 @@
+---
+# - name: Fix dpkg interrupted state
+#   ansible.builtin.shell: dpkg --configure -a
+#   ignore_errors: yes
+
+# - name: Fix broken packages
+#   ansible.builtin.shell: apt --fix-broken install -y
+#   ignore_errors: yes
+
+- name: Install nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+
+- name: Create nginx SSL certificates directory
+  ansible.builtin.file:
+    path: /etc/nginx/ssl
+    state: directory
+    mode: '0755'
+
+- name: Generate nginx CA private key
+  ansible.builtin.openssl_privatekey:
+    path: /etc/nginx/ssl/ca.key
+    size: 4096
+
+- name: Generate nginx CA certificate signing request
+  ansible.builtin.openssl_csr:
+    path: /etc/nginx/ssl/ca.csr
+    privatekey_path: /etc/nginx/ssl/ca.key
+    common_name: "Tantor Nginx CA"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+
+- name: Create nginx CA config file
+  ansible.builtin.copy:
+    content: |
+      [req]
+      distinguished_name = req_distinguished_name
+      req_extensions = v3_ca
+      x509_extensions = v3_ca
+      prompt = no
+
+      [req_distinguished_name]
+      C = RU
+      ST = Moscow
+      L = Moscow
+      O = Tantor
+      CN = Tantor Nginx CA
+
+      [v3_ca]
+      basicConstraints = critical,CA:TRUE
+      keyUsage = critical,keyCertSign,cRLSign
+      subjectKeyIdentifier = hash
+    dest: /etc/nginx/ssl/ca.cnf
+    mode: '0644'
+
+- name: Generate nginx CA certificate
+  ansible.builtin.shell: |
+    openssl req -new -x509 -days 3650 -sha256 -key /etc/nginx/ssl/ca.key \
+      -out /etc/nginx/ssl/ca.crt \
+      -subj "/C=RU/ST=Moscow/L=Moscow/O=Tantor/CN=Tantor Nginx CA" \
+      -extensions v3_ca \
+      -config /etc/nginx/ssl/ca.cnf
+  args:
+    creates: /etc/nginx/ssl/ca.crt
+
+- name: Fix nginx CA certificate permissions
+  ansible.builtin.file:
+    path: /etc/nginx/ssl/ca.crt
+    mode: '0644'
+
+- name: Fix nginx CA private key permissions
+  ansible.builtin.file:
+    path: /etc/nginx/ssl/ca.key
+    mode: '0600'
+
+- name: Generate nginx private key
+  ansible.builtin.openssl_privatekey:
+    path: /etc/nginx/ssl/nginx.key
+    size: 2048
+
+- name: Fix nginx private key permissions
+  ansible.builtin.file:
+    path: /etc/nginx/ssl/nginx.key
+    mode: '0600'
+
+- name: Generate nginx certificate signing request
+  ansible.builtin.openssl_csr:
+    path: /etc/nginx/ssl/nginx.csr
+    privatekey_path: /etc/nginx/ssl/nginx.key
+    common_name: "{{ inventory_hostname }}"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+    subject_alt_name: "DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+
+- name: Create nginx extfile
+  ansible.builtin.copy:
+    content: |
+      [v3_server]
+      basicConstraints = CA:FALSE
+      keyUsage = digitalSignature,keyEncipherment
+      extendedKeyUsage = serverAuth
+      subjectAltName = DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+    dest: /etc/nginx/ssl/nginx.ext
+    mode: '0644'
+
+- name: Generate nginx certificate
+  ansible.builtin.shell: |
+    openssl x509 -req -in /etc/nginx/ssl/nginx.csr \
+      -CA /etc/nginx/ssl/ca.crt \
+      -CAkey /etc/nginx/ssl/ca.key \
+      -CAcreateserial \
+      -out /etc/nginx/ssl/nginx.crt \
+      -days 365 \
+      -sha256 \
+      -extensions v3_server \
+      -extfile /etc/nginx/ssl/nginx.ext
+  args:
+    creates: /etc/nginx/ssl/nginx.crt
+
+- name: Fix nginx certificate permissions
+  ansible.builtin.file:
+    path: /etc/nginx/ssl/nginx.crt
+    mode: '0644'
+
+# Create nginx client certificates directory
+- name: Create nginx client certificates directory
+  ansible.builtin.file:
+    path: /root/certs/nginx
+    state: directory
+    mode: '0700'
+
+# Generate nginx client private key
+- name: Generate nginx client private key
+  ansible.builtin.openssl_privatekey:
+    path: /root/certs/nginx/client.key
+    size: 2048
+
+- name: Fix nginx client private key permissions
+  ansible.builtin.file:
+    path: /root/certs/nginx/client.key
+    mode: '0600'
+
+# Generate nginx client certificate signing request
+- name: Generate nginx client certificate signing request
+  ansible.builtin.openssl_csr:
+    path: /root/certs/nginx/client.csr
+    privatekey_path: /root/certs/nginx/client.key
+    common_name: "nginx-client"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+    subject_alt_name: "DNS:nginx-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+
+# Create nginx client extfile
+- name: Create nginx client extfile
+  ansible.builtin.copy:
+    content: |
+      [v3_client]
+      basicConstraints = CA:FALSE
+      keyUsage = digitalSignature,keyEncipherment
+      extendedKeyUsage = clientAuth
+      subjectAltName = DNS:nginx-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+    dest: /root/certs/nginx/client.ext
+    mode: '0644'
+
+# Generate nginx client certificate
+- name: Generate nginx client certificate
+  ansible.builtin.shell: |
+    openssl x509 -req -in /root/certs/nginx/client.csr \
+      -CA /etc/nginx/ssl/ca.crt \
+      -CAkey /etc/nginx/ssl/ca.key \
+      -CAcreateserial \
+      -out /root/certs/nginx/client.crt \
+      -days 365 \
+      -sha256 \
+      -extensions v3_client \
+      -extfile /root/certs/nginx/client.ext
+  args:
+    creates: /root/certs/nginx/client.crt
+
+- name: Fix nginx client certificate permissions
+  ansible.builtin.file:
+    path: /root/certs/nginx/client.crt
+    mode: '0644'
+
+# Copy nginx CA certificate to client directory
+- name: Copy nginx CA certificate to client directory
+  ansible.builtin.copy:
+    src: /etc/nginx/ssl/ca.crt
+    dest: /root/certs/nginx/root.crt
+    remote_src: true
+    mode: '0644'
+
+- name: Create nginx configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/sites-available/patroni
+    mode: '0644'
+  notify: restart nginx
+
+- name: Enable nginx site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/patroni
+    dest: /etc/nginx/sites-enabled/patroni
+    state: link
+  notify: restart nginx
+
+- name: Remove default nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: restart nginx
+
+- name: Start and enable nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: yes
+
+# Clean up temporary files
+- name: Clean up temporary CSR files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/ssl/ca.csr
+    - /etc/nginx/ssl/nginx.csr
+    - /root/certs/nginx/client.csr
+
+- name: Clean up temporary config files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/ssl/ca.cnf
+    - /etc/nginx/ssl/nginx.ext
+    - /root/certs/nginx/client.ext
+
+# Verify certificates
+- name: Verify nginx CA certificate
+  ansible.builtin.shell: |
+    openssl verify -CAfile /etc/nginx/ssl/ca.crt /etc/nginx/ssl/ca.crt
+  register: nginx_ca_verify
+  failed_when: nginx_ca_verify.rc != 0
+
+- name: Verify nginx server certificate
+  ansible.builtin.shell: |
+    openssl verify -CAfile /etc/nginx/ssl/ca.crt /etc/nginx/ssl/nginx.crt
+  register: nginx_server_verify
+  failed_when: nginx_server_verify.rc != 0
+
+- name: Verify nginx client certificate
+  ansible.builtin.shell: |
+    openssl verify -CAfile /etc/nginx/ssl/ca.crt /root/certs/nginx/client.crt
+  register: nginx_client_verify
+  failed_when: nginx_client_verify.rc != 0 

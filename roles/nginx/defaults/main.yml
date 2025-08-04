@@ -1,0 +1,11 @@
+---
+# Nginx SSL port
+nginx_ssl_port: 9443
+
+# Nginx SSL certificate paths
+nginx_ssl_cert: /etc/nginx/ssl/nginx.crt
+nginx_ssl_key: /etc/nginx/ssl/nginx.key
+
+# Nginx SSL settings
+nginx_ssl_protocols: "TLSv1.2 TLSv1.3"
+nginx_ssl_ciphers: "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384" 

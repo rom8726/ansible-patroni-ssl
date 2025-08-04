@@ -27,6 +27,9 @@
   ansible.builtin.apt:
     name: postgresql-{{ pg_version }}
     state: present
+    force: yes
+  environment:
+    POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
 
 - name: Install patroni
   ansible.builtin.pip:
@@ -43,6 +46,12 @@
     src: patroni.yml.j2
     dest: /etc/patroni.yml
     mode: '0644'
+
+- name: Clean PostgreSQL data directory if needed
+  ansible.builtin.file:
+    path: "{{ data_dir }}"
+    state: absent
+  when: clean_postgresql is defined and clean_postgresql | bool
 
 - name: Set owner of data directory PostgreSQL
   ansible.builtin.file:
@@ -89,3 +98,25 @@
     name: patroni
     state: restarted
     enabled: true
+
+- name: Copy Patroni CA certificate to system certificate store
+  ansible.builtin.copy:
+    src: /etc/patroni/certs/root.crt
+    dest: /usr/local/share/ca-certificates/patroni-ca.crt
+    remote_src: true
+    mode: '0644'
+
+- name: Update CA certificates
+  ansible.builtin.shell: update-ca-certificates
+  args:
+    creates: /etc/ssl/certs/patroni-ca.pem
+
+- name: Verify Patroni certificates
+  ansible.builtin.shell: |
+    openssl x509 -in /etc/patroni/certs/patroni.crt -text -noout | grep -A 10 "Subject Alternative Name"
+  register: patroni_cert_info
+  changed_when: false
+
+- name: Display Patroni certificate info
+  ansible.builtin.debug:
+    var: patroni_cert_info.stdout_lines

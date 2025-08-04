@@ -4,6 +4,8 @@ listen-peer-urls: http://{{ ansible_host }}:2380
 listen-client-urls: http://{{ ansible_host }}:2379,http://127.0.0.1:2379
 initial-advertise-peer-urls: http://{{ ansible_host }}:2380
 advertise-client-urls: http://{{ ansible_host }}:2379
-initial-cluster: "{% for host in groups['promoters'] %}etcd{{ hostvars[host]['node_id'] }}=http://{{ hostvars[host]['ansible_host'] }}:2380{% if not loop.last %},{% endif %}{% endfor %}"
-initial-cluster-state: "{{ etcd_cluster_state | default('new') }}"
+initial-cluster: "etcd1=http://{{ hostvars['patroni1']['ansible_host'] }}:2380,etcd2=http://{{ hostvars['patroni2']['ansible_host'] }}:2380,etcd3=http://{{ hostvars['patroni3']['ansible_host'] }}:2380"
+initial-cluster-state: "new"
 initial-cluster-token: etcd-cluster-01
+election-timeout: 5000
+heartbeat-interval: 100

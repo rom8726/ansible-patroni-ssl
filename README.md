@@ -1,190 +1,152 @@
-# ansible-patroni
-Ansible playbook for deploying PostgreSQL Patroni cluster
+# Ansible Patroni Cluster with SSL
 
-[![boosty-cozy](https://gideonwhite1029.github.io/badges/cozy-boosty_vector.svg)](https://boosty.to/dev-tools-hacker)
-
-⚠️ **WARNING: This configuration is for testing/development purposes only. DO NOT use in production without proper security hardening!**
-
-## Overview
-This Ansible playbook automates the deployment of a PostgreSQL high-availability cluster using Patroni and etcd. The setup includes the following components for connection management and high availability:
-- `Keepalived` creates a Virtual IP (VIP) for failover.
-- `HAProxy` acts as a proxy layer for distributing requests.
-- `PgBouncer` operates as a connection pooler.
-  
-The connection path:
-```
-Client -> Keepalived VIP -> HAProxy -> PgBouncer -> PostgreSQL
-```
-
-## Prerequisites
-- Ubuntu/Debian-based system
-- Ansible installed on the control node
-- Network connectivity between all nodes
-
-## Components
-- PostgreSQL 16
-- Patroni
-- etcd (for distributed configuration)
-- PgBouncer (for connection pooling)
-- Keepalived (for VIP)
-- HAProxy (for load balancing)
-- Python 3 and pip
-- Node Exporter (system metrics)
-- Postgres Exporter (PostgreSQL metrics)
+Ansible playbook for deploying a high-availability PostgreSQL cluster using Patroni and etcd.
 
 ## Quick Start
-1. Clone this repository.
-2. Create config files with the command `make init`.
-3. Update `inventory.ini` with your servers:
-```ini
-[promoters]
-patroni1 ansible_host=192.168.64.2 node_id=1
-patroni2 ansible_host=192.168.64.3 node_id=2
-patroni3 ansible_host=192.168.64.4 node_id=3 
-```
-4. Update `ansible.cfg` with your user (root by default).
-5. Set variable `cluster_vip_1` in group_vars (some VIP address for keepalived).
-6. Set variable `keepalived_vip_interface` in keepalived default vars.
-7. Run the playbook:
-```shell
-# Deploy Patroni cluster
-make up
+
+1. **Setup inventory:**
+```bash
+cp inventory.ini.example inventory.ini
+# Edit IP addresses in inventory.ini
 ```
 
-## Default Configuration
+2. **Deployment:**
+```bash
+# Full deployment (all components)
+ansible-playbook -i inventory.ini playbook.yml
 
-### Network Ports
-- PostgreSQL: 5432
-- Patroni API: 8008
-- etcd client: 2379
-- etcd peer: 2380
-- HAProxy PostgreSQL (master): 5000
-- HAProxy PostgreSQL (replica): 5001
-- HAProxy Statistics: 7000
-- PgBouncer: 6432
-- Node Exporter: 9100
-- Postgres Exporter: 9187
+# Core components only
+ansible-playbook -i inventory.ini playbook.yml --tags certificates,etcd,patroni
 
-### Keepalived Configuration
-- VIP: Used for automatic failover between HAProxy instances.
-- Configured to determine the `MASTER` node based on its `node_id` in the cluster.
-
-### PgBouncer Configuration
-- Connection pooling for PostgreSQL to reduce the overhead of establishing frequent connections.
-- Default port: `6432`.
-- Authentication method: Userlist file.
-- Configurations stored in `/etc/pgbouncer/pgbouncer.ini`.
-
-### PostgreSQL Settings
-- Version: 16
-- Encoding: UTF8
-- Max Connections: 100
-- Shared Buffers: 256MB
-- WAL Level: replica
-- Shared Preload Libraries: pg_stat_statements, auto_explain
-
-### Patroni Settings
-- TTL: 30
-- Loop Wait: 10
-- Retry Timeout: 10
-- Max Lag: 1048576
-- Uses pg_rewind: true
-- Uses replication slots: true
-
-### Authentication (Default)
-⚠️ Change these values:
-- PostgreSQL superuser: postgres/password
-- Replication user: replicator/password
-
-### Monitoring Components
-#### Node Exporter
-- Version: 1.9.1
-- Metrics Port: 9100
-- Systemd Service: node_exporter.service
-- User: node_exporter
-
-#### Postgres Exporter
-- Version: 0.17.1
-- Metrics Port: 9187
-- Systemd Service: postgres_exporter.service
-- User: postgres
-- Config Path: /etc/postgres_exporter/postgres_exporter.yaml
-
-## Important Security Notes
-This deployment includes several configurations that are NOT suitable for production:
-- Basic default passwords
-- Non-encrypted connections
-- Root SSH access
-- No SSL/TLS configuration
-- No firewall setup
-- Basic authentication methods
-
-## Logging
-- Patroni logs: /var/log/patroni/patroni.log
-- etcd logs: /var/log/etcd.log
-- PgBouncer logs: /var/log/pgbouncer/pgbouncer.log
-- Log rotation is configured for Patroni logs (7 days retention)
-- Node Exporter logs: journalctl -u node_exporter
-- Postgres Exporter logs: journalctl -u postgres_exporter
-- Keepalived logs: journalctl -u keepalived
-
-## Service Management
-``` bash
-# Patroni service
-systemctl status patroni
-systemctl start patroni
-systemctl stop patroni
-
-# etcd service
-systemctl status etcd
-systemctl start etcd
-systemctl stop etcd
-
-# HAProxy service
-systemctl status haproxy
-systemctl start haproxy
-systemctl stop haproxy
-
-# PgBouncer service
-systemctl status pgbouncer
-systemctl start pgbouncer
-systemctl stop pgbouncer
-
-# Keepalived service
-systemctl status keepalived
-systemctl start keepalived
-systemctl stop keepalived
-
-# Monitoring services
-systemctl status node_exporter
-systemctl status postgres_exporter
+# Or use Makefile commands
+make deploy          # Full deployment
+make deploy-core     # Core components only
+make deploy-ha       # HA components only
 ```
 
-## Monitoring
-### Available Metrics
-- System metrics (via node_exporter): http://host:9100/metrics
-- PostgreSQL metrics (via postgres_exporter): http://host:9187/metrics
+## Project Structure
 
-### PostgreSQL Exporter Metrics
-Postgres Exporter provides the following metric groups:
+```
+ansible-patroni-ssl/
+├── playbook.yml              # Main playbook
+├── inventory.ini             # Host configuration
+├── group_vars/promoters.yml  # Cluster variables
+├── roles/                    # Ansible roles
+│   ├── certificates/         # SSL certificates
+│   ├── etcd/                # etcd cluster
+│   ├── patroni/             # PostgreSQL + Patroni
+│   ├── pgbouncer/           # Connection pooling
+│   ├── haproxy/             # Load balancer
+│   ├── keepalived/          # High availability
+│   └── nginx/               # Web interface
+└── scripts/                  # Useful scripts
+    ├── debug_etcd.sh        # etcd diagnostics
+    ├── test_patroni_ssl.sh  # SSL connection test
+    └── copy_certificates.sh # Copy certificates
+```
 
-#### PostgreSQL Settings
-- Monitors PostgreSQL configuration parameters
-- Collects values from all pg_settings entries
-- Includes parameter name, value, unit, and a short description
-- Exposed as GAUGE metrics
+## Components
 
-#### Replication Status
-- Instance replication status monitoring:
-  - Master/replica state detection
-  - Master status monitoring (is_master metric)
-  - Replica status monitoring (is_replica metric)
-  - Replication lag monitoring in seconds (lag_seconds metric)
-  - All metrics are exposed as a GAUGE type
+### Core Components
+- **Certificates**: SSL certificates for all components
+- **etcd**: Distributed coordination cluster
+- **Patroni**: PostgreSQL high availability manager
 
-#### Connection Statistics
-- Detailed connection statistics:
-  - Number of connections by state (active, idle, etc.)
-  - Grouped by wait event types
-  - Total connection count monitoring by different states
-  - Exposed as GAUGE metrics with state and wait_event_type labels
+### Load Balancing & High Availability
+- **PgBouncer**: Connection pooling for PostgreSQL
+- **HAProxy**: Load balancer for database connections
+- **Keepalived**: Virtual IP management for HA
+
+### Web Interface
+- **Nginx**: Web proxy for Patroni API and monitoring
+
+## Usage
+
+### Check cluster status
+```bash
+# Check etcd
+ansible-playbook -i inventory.ini playbook.yml --tags etcd
+
+# Check Patroni
+ansible-playbook -i inventory.ini playbook.yml --tags patroni
+```
+
+### Connect to PostgreSQL
+```bash
+# With SSL certificates for postgres user
+psql "postgresql://postgres@192.168.64.11:5432/postgres?sslmode=verify-full&sslcert=/home/postgres/certs/client.crt&sslkey=/home/postgres/certs/client.key&sslrootcert=/etc/postgresql/certs/root.crt"
+
+# With SSL certificates for pma_user
+psql "postgresql://pma_user@192.168.64.11:5432/postgres?sslmode=verify-full&sslcert=/home/postgres/certs/pma_user.crt&sslkey=/home/postgres/certs/pma_user.key&sslrootcert=/etc/postgresql/certs/root.crt"
+
+# Connect from external network via Keepalived VIP
+psql "postgresql://pma_user@192.168.64.100:5432/postgres?sslmode=verify-full&sslcert=/home/postgres/certs/pma_user.crt&sslkey=/home/postgres/certs/pma_user.key&sslrootcert=/etc/postgresql/certs/root.crt"
+
+# Connect from external network (192.168.0.0/24) via Keepalived VIP
+psql "postgresql://pma_user@192.168.64.100:5432/postgres?sslmode=verify-full&sslcert=/home/postgres/certs/pma_user.crt&sslkey=/home/postgres/certs/pma_user.key&sslrootcert=/etc/postgresql/certs/root.crt"
+
+# Without SSL (not recommended)
+psql "postgresql://postgres@192.168.64.11:5432/postgres"
+```
+
+### Patroni API
+```bash
+# Check cluster status
+curl -k https://192.168.64.11:8008/cluster
+
+# With SSL certificates
+# Patroni API (HTTP, no SSL required for internal cluster communication)
+curl http://192.168.64.11:8008/cluster
+
+# Nginx SSL proxy to Patroni API (recommended for external access)
+curl --cert /root/certs/nginx/client.crt \
+  --key /root/certs/nginx/client.key \
+  --cacert /root/certs/nginx/root.crt \
+  https://192.168.64.11:9443/cluster
+
+# Nginx SSL proxy from external network
+curl --cert /path/to/nginx_client.crt \
+  --key /path/to/nginx_client.key \
+  --cacert /path/to/nginx_client_ca.crt \
+  https://192.168.64.100:9443/cluster
+```
+
+## Diagnostics
+
+### Scripts in scripts/
+```bash
+# etcd diagnostics
+./scripts/debug_etcd.sh 192.168.64.11 root
+
+# SSL connection test
+./scripts/test_patroni_ssl.sh
+
+# Copy certificates for testing
+./scripts/copy_certificates.sh
+```
+
+### Logs
+```bash
+# Patroni logs
+journalctl -u patroni -f
+
+# etcd logs
+journalctl -u etcd -f
+
+# PostgreSQL logs
+tail -f /var/log/postgresql/postgresql-16-main.log
+```
+
+## Variables
+
+Main variables in `group_vars/promoters.yml`:
+- `postgresql_version`: PostgreSQL version
+- `etcd_client_port`: etcd port
+- `clean_etcd`: clean etcd data on deployment
+
+## Requirements
+
+- Ubuntu/Debian
+- Ansible 2.9+
+- SSH access to hosts
+- Python 3 on target hosts

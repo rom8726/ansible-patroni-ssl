@@ -35,13 +35,11 @@ frontend patroni_replicas
     mode tcp
     default_backend patroni_replicas_backend
 
-frontend patroni_api_ssl
-    bind *:8443 ssl crt /etc/haproxy/certs/patroni.pem ca-file /etc/haproxy/certs/ca.crt verify optional
+frontend patroni_api
+    bind *:8443
     mode http
     default_backend patroni_api_backend
     option forwardfor
-    http-request set-header X-Forwarded-Port %[dst_port]
-    http-request add-header X-Forwarded-Proto https if { ssl_fc }
 
 backend patroni_master_backend
     mode tcp
@@ -66,5 +64,5 @@ backend patroni_api_backend
     http-check expect status 200
     default-server inter 3s fall 3 rise 2
 {% for host in groups['promoters'] %}
-    server {{ host }} {{ hostvars[host]['ansible_host'] }}:{{ patroni_api_port }} check ssl verify none
-{% endfor %}
+    server {{ host }} {{ hostvars[host]['ansible_host'] }}:{{ patroni_api_port }} check
+{% endfor %} 

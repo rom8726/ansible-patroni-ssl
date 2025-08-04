@@ -1,11 +1,22 @@
 ---
-- name: Deploy Patroni cluster
+# Main playbook for Patroni PostgreSQL cluster with SSL support
+# This playbook deploys a complete high-availability PostgreSQL cluster
+
+# Play 1: Deploy core components (certificates, etcd, patroni)
+- name: Deploy core cluster components
   hosts: promoters
   become: true
   roles:
-    - etcd
-    - patroni
-    - metrics
-    - pgbouncer
-    - haproxy
-    - keepalived
+    - { role: certificates, tags: [certificates, ssl] }
+    - { role: etcd, tags: [etcd, cluster] }
+    - { role: patroni, tags: [patroni, postgresql] }
+
+# Play 2: Deploy load balancing and high availability components
+- name: Deploy load balancing and HA components
+  hosts: promoters
+  become: true
+  roles:
+    - { role: pgbouncer, tags: [pgbouncer, connection-pool] }
+    - { role: haproxy, tags: [haproxy, load-balancer] }
+    - { role: keepalived, tags: [keepalived, ha] }
+    - { role: nginx, tags: [nginx] }

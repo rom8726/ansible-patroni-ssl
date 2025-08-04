@@ -1,15 +1,11 @@
 # Common versions
-node_exporter_version: "1.9.1"
-postgres_exporter_version: "0.17.1"
-prometheus_version: "3.3.0"
-grafana_version: "11.6.1"
-
 arch: "linux-amd64"
 prometheus_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
 
 # Common Patroni settings
 patroni_scope: demo
 patroni_api_port: 8008
+patroni_api_ssl_port: 8443
 patroni_ttl: 30
 patroni_loop_wait: 10
 patroni_retry_timeout: 10
@@ -20,6 +16,12 @@ patroni_config: "/etc/patroni.yml"
 
 # etcd settings
 etcd_client_port: 2379
+clean_etcd: false
+etcd_cluster_formation: true
+etcd_clean_data: false
+
+# PostgreSQL settings
+clean_postgresql: false
 
 # PostgreSQL settigns
 pg_version: 16
@@ -30,12 +32,22 @@ postgresql_port: 5432
 postgresql_data_dir: "/var/lib/postgresql/{{ postgresql_version }}/main"
 postgresql_bin_dir: "/usr/lib/postgresql/{{ postgresql_version }}/bin"
 
+# SSL/TLS settings
+ssl_ca_cert: "/etc/postgresql/certs/root.crt"
+ssl_server_cert: "/etc/postgresql/certs/server.crt"
+ssl_server_key: "/etc/postgresql/certs/server.key"
+ssl_client_cert_dir: "/home/postgres/certs"
+ssl_patroni_client_cert_dir: "/home/postgres/patroni-certs"
+postgresql_ssl_min_protocol: "TLSv1.2"
+postgresql_ssl_prefer_server_ciphers: "on"
+
 # PostgreSQL users
 postgresql_superuser_name: postgres
 postgresql_superuser_password: password
 postgresql_replication_user: replicator
 postgresql_replication_password: password
 postgresql_replication_auth_method: md5
+postgresql_pma_user_password: password
 
 # PostgreSQL params
 postgresql_max_connections: 100
@@ -57,20 +69,16 @@ pgbouncer_listen_port: 6432
 
 # HAProxy params
 haproxy_config: "/etc/haproxy/haproxy.cfg"
+haproxy_ssl_cert: "/etc/haproxy/certs/patroni.pem"
+
+# Nginx params
+nginx_ssl_port: 9443
+nginx_ssl_cert: "/etc/nginx/ssl/nginx.crt"
+nginx_ssl_key: "/etc/nginx/ssl/nginx.key"
 
 # Cluster variables
 cluster_vip_1: 192.168.64.100
 
-# Prometheus settings
-prometheus_retention: "30d"
-prometheus_storage_path: "/var/lib/prometheus"
-prometheus_config_path: "/etc/prometheus"
-
-# Grafana settings
-grafana_admin_password: "admin"
-
-# Common paths and ports for exporters
-node_exporter_port: 9100
-postgres_exporter_port: 9187
-prometheus_port: 9090
-grafana_port: 3000
+# External network access
+external_networks:
+  - "192.168.0.0/24"

@@ -1,0 +1,801 @@
+---
+- name: Install OpenSSL
+  ansible.builtin.apt:
+    name: openssl
+    state: present
+    update_cache: true
+
+- name: Create postgres group
+  ansible.builtin.group:
+    name: postgres
+    system: yes
+    state: present
+
+- name: Create postgres user
+  ansible.builtin.user:
+    name: postgres
+    system: yes
+    shell: /bin/bash
+    home: /var/lib/postgresql
+    create_home: yes
+    group: postgres
+    state: present
+
+- name: Create PostgreSQL SSL certificates directory
+  ansible.builtin.file:
+    path: /etc/postgresql/certs
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+
+- name: Create Patroni SSL certificates directory
+  ansible.builtin.file:
+    path: /etc/patroni/certs
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0700'
+
+- name: Create HAProxy SSL certificates directory
+  ansible.builtin.file:
+    path: /etc/haproxy/certs
+    state: directory
+    mode: '0755'
+
+# - name: Create client certificates directories
+#   ansible.builtin.file:
+#     path: "{{ item }}"
+#     state: directory
+#     mode: '0700'
+#   loop:
+#     - /root/certs/pg
+#     - /root/certs/patroni
+
+# Create PostgreSQL client certificates directory accessible by postgres user
+- name: Create PostgreSQL client certificates directory for postgres user
+  ansible.builtin.file:
+    path: /home/postgres/certs
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0700'
+
+# Create Patroni client certificates directory accessible by postgres user
+- name: Create Patroni client certificates directory for postgres user
+  ansible.builtin.file:
+    path: /home/postgres/patroni-certs
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0700'
+
+# PostgreSQL CA and Server Certificates
+- name: Generate PostgreSQL CA private key
+  ansible.builtin.openssl_privatekey:
+    path: /etc/postgresql/certs/root.key
+    size: 4096
+
+- name: Create PostgreSQL CA config file
+  ansible.builtin.copy:
+    content: |
+      [req]
+      distinguished_name = req_distinguished_name
+      req_extensions = v3_ca
+      x509_extensions = v3_ca
+      prompt = no
+
+      [req_distinguished_name]
+      C = RU
+      ST = Moscow
+      L = Moscow
+      O = Tantor
+      CN = Tantor PostgreSQL CA
+
+      [v3_ca]
+      basicConstraints = critical,CA:TRUE
+      keyUsage = critical,keyCertSign,cRLSign
+      subjectKeyIdentifier = hash
+    dest: "/etc/postgresql/certs/root.cnf"
+    mode: '0644'
+
+- name: Generate PostgreSQL CA certificate
+  ansible.builtin.shell: |
+    openssl req -new -x509 -days 3650 -sha256 -key "/etc/postgresql/certs/root.key" \
+      -out "/etc/postgresql/certs/root.crt" \
+      -subj "/C=RU/ST=Moscow/L=Moscow/O=Tantor/CN=Tantor PostgreSQL CA" \
+      -extensions v3_ca \
+      -config "/etc/postgresql/certs/root.cnf"
+  args:
+    creates: "/etc/postgresql/certs/root.crt"
+
+- name: Fix CA certificate permissions
+  ansible.builtin.file:
+    path: "/etc/postgresql/certs/root.crt"
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+- name: Fix CA private key permissions
+  ansible.builtin.file:
+    path: "/etc/postgresql/certs/root.key"
+    mode: '0600'
+    owner: postgres
+    group: postgres
+
+- name: Generate PostgreSQL server private key
+  ansible.builtin.openssl_privatekey:
+    path: "/etc/postgresql/certs/server.key"
+    size: 2048
+
+- name: Generate PostgreSQL server certificate signing request
+  ansible.builtin.openssl_csr:
+    path: "/etc/postgresql/certs/server.csr"
+    privatekey_path: "/etc/postgresql/certs/server.key"
+    common_name: "{{ inventory_hostname }}"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+    subject_alt_name: "DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+
+- name: Create PostgreSQL server extfile
+  ansible.builtin.copy:
+    content: |
+      [v3_server]
+      basicConstraints = CA:FALSE
+      keyUsage = digitalSignature,keyEncipherment
+      extendedKeyUsage = serverAuth
+      subjectAltName = DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+    dest: "/etc/postgresql/certs/server.ext"
+    mode: '0644'
+
+- name: Generate PostgreSQL server certificate
+  ansible.builtin.shell: |
+    openssl x509 -req -in "/etc/postgresql/certs/server.csr" \
+      -CA "/etc/postgresql/certs/root.crt" \
+      -CAkey "/etc/postgresql/certs/root.key" \
+      -CAcreateserial \
+      -out "/etc/postgresql/certs/server.crt" \
+      -days 365 \
+      -sha256 \
+      -extensions v3_server \
+      -extfile "/etc/postgresql/certs/server.ext"
+  args:
+    creates: "/etc/postgresql/certs/server.crt"
+
+- name: Fix server certificate permissions
+  ansible.builtin.file:
+    path: "/etc/postgresql/certs/server.crt"
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+- name: Fix server private key permissions
+  ansible.builtin.file:
+    path: "/etc/postgresql/certs/server.key"
+    mode: '0600'
+    owner: postgres
+    group: postgres
+
+
+
+# Patroni API Certificates
+- name: Copy PostgreSQL CA certificate to Patroni certs directory
+  ansible.builtin.copy:
+    src: "/etc/postgresql/certs/root.crt"
+    dest: /etc/patroni/certs/root.crt
+    remote_src: true
+    owner: postgres
+    group: postgres
+    mode: '0644'
+
+- name: Generate Patroni server private key
+  ansible.builtin.openssl_privatekey:
+    path: /etc/patroni/certs/patroni.key
+    size: 2048
+
+- name: Fix Patroni server private key permissions
+  ansible.builtin.file:
+    path: /etc/patroni/certs/patroni.key
+    mode: '0600'
+    owner: postgres
+    group: postgres
+
+- name: Generate Patroni server certificate signing request
+  ansible.builtin.openssl_csr:
+    path: /etc/patroni/certs/patroni.csr
+    privatekey_path: /etc/patroni/certs/patroni.key
+    common_name: "{{ inventory_hostname }}"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+    subject_alt_name: "DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+
+- name: Create Patroni server extfile
+  ansible.builtin.copy:
+    content: |
+      [v3_server]
+      basicConstraints = CA:FALSE
+      keyUsage = digitalSignature,keyEncipherment
+      extendedKeyUsage = serverAuth
+      subjectAltName = DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},DNS:localhost,IP:{{ ansible_host }},IP:127.0.0.1,IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+    dest: /etc/patroni/certs/patroni.ext
+    mode: '0644'
+
+- name: Generate Patroni server certificate
+  ansible.builtin.shell: |
+    openssl x509 -req -in /etc/patroni/certs/patroni.csr \
+      -CA /etc/patroni/certs/root.crt \
+      -CAkey "/etc/postgresql/certs/root.key" \
+      -CAcreateserial \
+      -out /etc/patroni/certs/patroni.crt \
+      -days 365 \
+      -sha256 \
+      -extensions v3_server \
+      -extfile /etc/patroni/certs/patroni.ext
+  args:
+    creates: /etc/patroni/certs/patroni.crt
+
+- name: Fix Patroni server certificate permissions
+  ansible.builtin.file:
+    path: /etc/patroni/certs/patroni.crt
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+
+
+# HAProxy Certificates
+- name: Generate HAProxy CA private key
+  ansible.builtin.openssl_privatekey:
+    path: /etc/haproxy/certs/ca.key
+    size: 4096
+
+- name: Generate HAProxy CA certificate signing request
+  ansible.builtin.openssl_csr:
+    path: /etc/haproxy/certs/ca.csr
+    privatekey_path: /etc/haproxy/certs/ca.key
+    common_name: "Tantor HAProxy CA"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+
+- name: Create HAProxy CA config file
+  ansible.builtin.copy:
+    content: |
+      [req]
+      distinguished_name = req_distinguished_name
+      req_extensions = v3_ca
+      x509_extensions = v3_ca
+      prompt = no
+
+      [req_distinguished_name]
+      C = RU
+      ST = Moscow
+      L = Moscow
+      O = Tantor
+      CN = Tantor HAProxy CA
+
+      [v3_ca]
+      basicConstraints = critical,CA:TRUE
+      keyUsage = critical,keyCertSign,cRLSign
+      subjectKeyIdentifier = hash
+    dest: /etc/haproxy/certs/ca.cnf
+    mode: '0644'
+
+- name: Generate HAProxy CA certificate
+  ansible.builtin.shell: |
+    openssl req -new -x509 -days 3650 -sha256 -key /etc/haproxy/certs/ca.key \
+      -out /etc/haproxy/certs/ca.crt \
+      -subj "/C=RU/ST=Moscow/L=Moscow/O=Tantor/CN=Tantor HAProxy CA" \
+      -extensions v3_ca \
+      -config /etc/haproxy/certs/ca.cnf
+  args:
+    creates: /etc/haproxy/certs/ca.crt
+
+- name: Fix HAProxy CA certificate permissions
+  ansible.builtin.file:
+    path: /etc/haproxy/certs/ca.crt
+    mode: '0644'
+
+- name: Generate HAProxy private key
+  ansible.builtin.openssl_privatekey:
+    path: /etc/haproxy/certs/patroni.key
+    size: 2048
+
+- name: Fix HAProxy CA private key permissions
+  ansible.builtin.file:
+    path: /etc/haproxy/certs/ca.key
+    mode: '0600'
+
+- name: Fix HAProxy private key permissions
+  ansible.builtin.file:
+    path: /etc/haproxy/certs/patroni.key
+    mode: '0600'
+
+- name: Generate HAProxy certificate signing request
+  ansible.builtin.openssl_csr:
+    path: /etc/haproxy/certs/patroni.csr
+    privatekey_path: /etc/haproxy/certs/patroni.key
+    common_name: "haproxy-patroni"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+    subject_alt_name: "DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }}"
+
+- name: Create HAProxy extfile
+  ansible.builtin.copy:
+    content: |
+      [v3_server]
+      basicConstraints = CA:FALSE
+      keyUsage = digitalSignature,keyEncipherment
+      extendedKeyUsage = serverAuth
+      subjectAltName = DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }}
+    dest: /etc/haproxy/certs/patroni.ext
+    mode: '0644'
+
+- name: Generate HAProxy certificate
+  ansible.builtin.shell: |
+    openssl x509 -req -in /etc/haproxy/certs/patroni.csr \
+      -CA /etc/haproxy/certs/ca.crt \
+      -CAkey /etc/haproxy/certs/ca.key \
+      -CAcreateserial \
+      -out /etc/haproxy/certs/patroni.crt \
+      -days 365 \
+      -sha256 \
+      -extensions v3_server \
+      -extfile /etc/haproxy/certs/patroni.ext
+  args:
+    creates: /etc/haproxy/certs/patroni.crt
+
+- name: Fix HAProxy certificate permissions
+  ansible.builtin.file:
+    path: /etc/haproxy/certs/patroni.crt
+    mode: '0644'
+
+- name: Create HAProxy PEM bundle
+  ansible.builtin.shell: |
+    cat /etc/haproxy/certs/patroni.crt /etc/haproxy/certs/patroni.key /etc/haproxy/certs/ca.crt > /etc/haproxy/certs/patroni.pem
+  args:
+    creates: /etc/haproxy/certs/patroni.pem
+
+- name: Set proper permissions for HAProxy PEM bundle
+  ansible.builtin.file:
+    path: /etc/haproxy/certs/patroni.pem
+    mode: '0600'
+
+
+
+# Client Certificates
+# PostgreSQL client certificates for postgres user
+- name: Generate PostgreSQL client private key for postgres user
+  ansible.builtin.openssl_privatekey:
+    path: /home/postgres/certs/client.key
+    size: 2048
+
+- name: Fix PostgreSQL client private key permissions for postgres user
+  ansible.builtin.file:
+    path: /home/postgres/certs/client.key
+    mode: '0600'
+    owner: postgres
+    group: postgres
+
+- name: Generate PostgreSQL client certificate signing request for postgres user
+  ansible.builtin.openssl_csr:
+    path: /home/postgres/certs/client.csr
+    privatekey_path: /home/postgres/certs/client.key
+    common_name: "postgresql-client"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+    subject_alt_name: "DNS:postgresql-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+
+- name: Create PostgreSQL client extfile for postgres user
+  ansible.builtin.copy:
+    content: |
+      [v3_client]
+      basicConstraints = CA:FALSE
+      keyUsage = digitalSignature,keyEncipherment
+      extendedKeyUsage = clientAuth
+      subjectAltName = DNS:postgresql-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+    dest: /home/postgres/certs/client.ext
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+- name: Generate PostgreSQL client certificate for postgres user
+  ansible.builtin.shell: |
+    openssl x509 -req -in /home/postgres/certs/client.csr \
+      -CA "/etc/postgresql/certs/root.crt" \
+      -CAkey "/etc/postgresql/certs/root.key" \
+      -CAcreateserial \
+      -out /home/postgres/certs/client.crt \
+      -days 365 \
+      -sha256 \
+      -extensions v3_client \
+      -extfile /home/postgres/certs/client.ext
+  args:
+    creates: /home/postgres/certs/client.crt
+
+- name: Fix PostgreSQL client certificate permissions for postgres user
+  ansible.builtin.file:
+    path: /home/postgres/certs/client.crt
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+- name: Copy PostgreSQL CA certificate to postgres user directory
+  ansible.builtin.copy:
+    src: "/etc/postgresql/certs/root.crt"
+    dest: /home/postgres/certs/root.crt
+    remote_src: true
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+# PostgreSQL client certificates for pma_user (in postgres user directory)
+- name: Generate PostgreSQL client private key for pma_user
+  ansible.builtin.openssl_privatekey:
+    path: /home/postgres/certs/pma_user.key
+    size: 2048
+
+- name: Fix PostgreSQL client private key permissions for pma_user
+  ansible.builtin.file:
+    path: /home/postgres/certs/pma_user.key
+    mode: '0600'
+    owner: postgres
+    group: postgres
+
+- name: Generate PostgreSQL client certificate signing request for pma_user
+  ansible.builtin.openssl_csr:
+    path: /home/postgres/certs/pma_user.csr
+    privatekey_path: /home/postgres/certs/pma_user.key
+    common_name: "pma_user"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+    subject_alt_name: "DNS:pma_user,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+
+- name: Create PostgreSQL client extfile for pma_user
+  ansible.builtin.copy:
+    content: |
+      [v3_client]
+      basicConstraints = CA:FALSE
+      keyUsage = digitalSignature,keyEncipherment
+      extendedKeyUsage = clientAuth
+      subjectAltName = DNS:pma_user,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+    dest: /home/postgres/certs/pma_user.ext
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+- name: Generate PostgreSQL client certificate for pma_user
+  ansible.builtin.shell: |
+    openssl x509 -req -in /home/postgres/certs/pma_user.csr \
+      -CA "/etc/postgresql/certs/root.crt" \
+      -CAkey "/etc/postgresql/certs/root.key" \
+      -CAcreateserial \
+      -out /home/postgres/certs/pma_user.crt \
+      -days 365 \
+      -sha256 \
+      -extensions v3_client \
+      -extfile /home/postgres/certs/pma_user.ext
+  args:
+    creates: /home/postgres/certs/pma_user.crt
+
+- name: Fix PostgreSQL client certificate permissions for pma_user
+  ansible.builtin.file:
+    path: /home/postgres/certs/pma_user.crt
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+# # PostgreSQL client certificates for root user (backup)
+# - name: Generate PostgreSQL client private key
+#   ansible.builtin.openssl_privatekey:
+#     path: /root/certs/pg/client.key
+#     size: 2048
+
+# - name: Fix PostgreSQL client private key permissions
+#   ansible.builtin.file:
+#     path: /root/certs/pg/client.key
+#     mode: '0600'
+
+# - name: Generate PostgreSQL client certificate signing request
+#   ansible.builtin.openssl_csr:
+#     path: /root/certs/pg/client.csr
+#     privatekey_path: /root/certs/pg/client.key
+#     common_name: "postgresql-client"
+#     organization_name: "Tantor"
+#     country_name: "RU"
+#     state_or_province_name: "Moscow"
+#     locality_name: "Moscow"
+#     email_address: "admin@tantorlabs.ru"
+#     subject_alt_name: "DNS:postgresql-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %}"
+
+# - name: Create PostgreSQL client extfile
+#   ansible.builtin.copy:
+#     content: |
+#       [v3_client]
+#       basicConstraints = CA:FALSE
+#       keyUsage = digitalSignature,keyEncipherment
+#       extendedKeyUsage = clientAuth
+#       subjectAltName = DNS:postgresql-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %}
+#     dest: /root/certs/pg/client.ext
+#     mode: '0644'
+
+# - name: Generate PostgreSQL client certificate
+#   ansible.builtin.shell: |
+#     openssl x509 -req -in /root/certs/pg/client.csr \
+#       -CA "/etc/postgresql/certs/root.crt" \
+#       -CAkey "/etc/postgresql/certs/root.key" \
+#       -CAcreateserial \
+#       -out /root/certs/pg/client.crt \
+#       -days 365 \
+#       -sha256 \
+#       -extensions v3_client \
+#       -extfile /root/certs/pg/client.ext
+#   args:
+#     creates: /root/certs/pg/client.crt
+
+# - name: Fix PostgreSQL client certificate permissions
+#   ansible.builtin.file:
+#     path: /root/certs/pg/client.crt
+#     mode: '0644'
+
+# - name: Copy PostgreSQL CA certificate to client directory
+#   ansible.builtin.copy:
+#     src: "/etc/postgresql/certs/root.crt"
+#     dest: /root/certs/pg/root.crt
+#     remote_src: true
+#     mode: '0644'
+
+# - name: Generate Patroni client private key
+#   ansible.builtin.openssl_privatekey:
+#     path: /root/certs/patroni/client.key
+#     size: 2048
+
+# - name: Fix Patroni client private key permissions
+#   ansible.builtin.file:
+#     path: /root/certs/patroni/client.key
+#     mode: '0600'
+
+# - name: Generate Patroni client certificate signing request
+#   ansible.builtin.openssl_csr:
+#     path: /root/certs/patroni/client.csr
+#     privatekey_path: /root/certs/patroni/client.key
+#     common_name: "patroni-client"
+#     organization_name: "Tantor"
+#     country_name: "RU"
+#     state_or_province_name: "Moscow"
+#     locality_name: "Moscow"
+#     email_address: "admin@tantorlabs.ru"
+#     subject_alt_name: "DNS:patroni-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %}"
+
+# - name: Create Patroni client extfile
+#   ansible.builtin.copy:
+#     content: |
+#       [v3_client]
+#       basicConstraints = CA:FALSE
+#       keyUsage = digitalSignature,keyEncipherment
+#       extendedKeyUsage = clientAuth
+#       subjectAltName = DNS:patroni-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %}
+#     dest: /root/certs/patroni/client.ext
+#     mode: '0644'
+
+# - name: Generate Patroni client certificate
+#   ansible.builtin.shell: |
+#     openssl x509 -req -in /root/certs/patroni/client.csr \
+#       -CA /etc/haproxy/certs/ca.crt \
+#       -CAkey /etc/haproxy/certs/ca.key \
+#       -CAcreateserial \
+#       -out /root/certs/patroni/client.crt \
+#       -days 365 \
+#       -sha256 \
+#       -extensions v3_client \
+#       -extfile /root/certs/patroni/client.ext
+#   args:
+#     creates: /root/certs/patroni/client.crt
+
+# - name: Fix Patroni client certificate permissions
+#   ansible.builtin.file:
+#     path: /root/certs/patroni/client.crt
+#     mode: '0644'
+
+# - name: Copy HAProxy CA certificate to Patroni client directory
+#   ansible.builtin.copy:
+#     src: /etc/haproxy/certs/ca.crt
+#     dest: /root/certs/patroni/root.crt
+#     remote_src: true
+#     mode: '0644'
+
+# Patroni client certificates for postgres user
+- name: Generate Patroni client private key for postgres user
+  ansible.builtin.openssl_privatekey:
+    path: /home/postgres/patroni-certs/client.key
+    size: 2048
+
+- name: Fix Patroni client private key permissions for postgres user
+  ansible.builtin.file:
+    path: /home/postgres/patroni-certs/client.key
+    mode: '0600'
+    owner: postgres
+    group: postgres
+
+- name: Generate Patroni client certificate signing request for postgres user
+  ansible.builtin.openssl_csr:
+    path: /home/postgres/patroni-certs/client.csr
+    privatekey_path: /home/postgres/patroni-certs/client.key
+    common_name: "patroni-client"
+    organization_name: "Tantor"
+    country_name: "RU"
+    state_or_province_name: "Moscow"
+    locality_name: "Moscow"
+    email_address: "admin@tantorlabs.ru"
+    subject_alt_name: "DNS:patroni-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+
+- name: Create Patroni client extfile for postgres user
+  ansible.builtin.copy:
+    content: |
+      [v3_client]
+      basicConstraints = CA:FALSE
+      keyUsage = digitalSignature,keyEncipherment
+      extendedKeyUsage = clientAuth
+      subjectAltName = DNS:patroni-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+    dest: /home/postgres/patroni-certs/client.ext
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+- name: Generate Patroni client certificate for postgres user
+  ansible.builtin.shell: |
+    openssl x509 -req -in /home/postgres/patroni-certs/client.csr \
+      -CA /etc/haproxy/certs/ca.crt \
+      -CAkey /etc/haproxy/certs/ca.key \
+      -CAcreateserial \
+      -out /home/postgres/patroni-certs/client.crt \
+      -days 365 \
+      -sha256 \
+      -extensions v3_client \
+      -extfile /home/postgres/patroni-certs/client.ext
+  args:
+    creates: /home/postgres/patroni-certs/client.crt
+
+- name: Fix Patroni client certificate permissions for postgres user
+  ansible.builtin.file:
+    path: /home/postgres/patroni-certs/client.crt
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+- name: Copy HAProxy CA certificate to Patroni client directory for postgres user
+  ansible.builtin.copy:
+    src: /etc/haproxy/certs/ca.crt
+    dest: /home/postgres/patroni-certs/root.crt
+    remote_src: true
+    mode: '0644'
+    owner: postgres
+    group: postgres
+
+# Clean up temporary files
+- name: Clean up temporary CSR files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/etc/postgresql/certs/server.csr"
+    - /etc/patroni/certs/patroni.csr
+    - /etc/haproxy/certs/ca.csr
+    - /etc/haproxy/certs/patroni.csr
+    # - /root/certs/pg/client.csr
+    # - /root/certs/patroni/client.csr
+    - /home/postgres/certs/client.csr
+    - /home/postgres/patroni-certs/client.csr
+    - /home/postgres/certs/pma_user.csr
+
+- name: Clean up temporary config files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/etc/postgresql/certs/root.cnf"
+    - "/etc/postgresql/certs/server.ext"
+    - /etc/patroni/certs/patroni.ext
+    - /etc/haproxy/certs/ca.cnf
+    - /etc/haproxy/certs/patroni.ext
+    # - /root/certs/pg/client.ext
+    # - /root/certs/patroni/client.ext
+    - /home/postgres/certs/client.ext
+    - /home/postgres/patroni-certs/client.ext
+    - /home/postgres/certs/pma_user.ext
+
+- name: Verify PostgreSQL CA certificate
+  ansible.builtin.shell: |
+    openssl verify -CAfile "/etc/postgresql/certs/root.crt" "/etc/postgresql/certs/root.crt"
+  register: pg_ca_verify
+  failed_when: pg_ca_verify.rc != 0
+
+- name: Verify HAProxy CA certificate
+  ansible.builtin.shell: |
+    openssl verify -CAfile /etc/haproxy/certs/ca.crt /etc/haproxy/certs/ca.crt
+  register: haproxy_ca_verify
+  failed_when: haproxy_ca_verify.rc != 0
+
+- name: Verify PostgreSQL server certificate
+  ansible.builtin.shell: |
+    openssl verify -CAfile "/etc/postgresql/certs/root.crt" "/etc/postgresql/certs/server.crt"
+  register: pg_server_verify
+  failed_when: pg_server_verify.rc != 0
+
+- name: Verify HAProxy server certificate
+  ansible.builtin.shell: |
+    openssl verify -CAfile /etc/haproxy/certs/ca.crt /etc/haproxy/certs/patroni.crt
+  register: haproxy_server_verify
+  failed_when: haproxy_server_verify.rc != 0
+
+# - name: Verify PostgreSQL client certificate
+#   ansible.builtin.shell: |
+#     openssl verify -CAfile "/etc/postgresql/certs/root.crt" /root/certs/pg/client.crt
+#   register: pg_client_verify
+#   failed_when: pg_client_verify.rc != 0
+
+# - name: Verify Patroni client certificate
+#   ansible.builtin.shell: |
+#     openssl verify -CAfile /etc/haproxy/certs/ca.crt /root/certs/patroni/client.crt
+#   register: patroni_client_verify
+#   failed_when: patroni_client_verify.rc != 0
+
+- name: Verify HAProxy PEM bundle structure
+  ansible.builtin.shell: |
+    grep -c "BEGIN CERTIFICATE" /etc/haproxy/certs/patroni.pem
+  register: pem_cert_count
+  failed_when: pem_cert_count.stdout != "2"
+
+- name: Verify HAProxy PEM bundle contains private key
+  ansible.builtin.shell: |
+    grep -c "BEGIN RSA PRIVATE KEY" /etc/haproxy/certs/patroni.pem
+  register: pem_key_count
+  failed_when: pem_key_count.stdout != "1"
+
+- name: Verify certificate permissions
+  ansible.builtin.shell: |
+    echo "PostgreSQL CA: $(stat -c %a /etc/postgresql/certs/root.crt)"
+    echo "PostgreSQL server cert: $(stat -c %a /etc/postgresql/certs/server.crt)"
+    echo "PostgreSQL server key: $(stat -c %a /etc/postgresql/certs/server.key)"
+    echo "Patroni cert: $(stat -c %a /etc/patroni/certs/patroni.crt)"
+    echo "Patroni key: $(stat -c %a /etc/patroni/certs/patroni.key)"
+    echo "HAProxy cert: $(stat -c %a /etc/haproxy/certs/patroni.crt)"
+    echo "HAProxy key: $(stat -c %a /etc/haproxy/certs/patroni.key)"
+    echo "HAProxy PEM: $(stat -c %a /etc/haproxy/certs/patroni.pem)"
+  register: cert_permissions
+  changed_when: false
+
+- name: Verify CA certificates have proper extensions
+  ansible.builtin.shell: |
+    echo "PostgreSQL CA Basic Constraints:"
+    openssl x509 -in /etc/postgresql/certs/root.crt -text -noout | grep -A 2 "Basic Constraints" || echo "Missing Basic Constraints"
+    echo "HAProxy CA Basic Constraints:"
+    openssl x509 -in /etc/haproxy/certs/ca.crt -text -noout | grep -A 2 "Basic Constraints" || echo "Missing Basic Constraints"
+  register: ca_extensions
+  changed_when: false
+
+- name: Verify server certificates have proper SAN
+  ansible.builtin.shell: |
+    echo "PostgreSQL server SAN:"
+    openssl x509 -in /etc/postgresql/certs/server.crt -text -noout | grep -A 3 "Subject Alternative Name" || echo "Missing SAN"
+    echo "HAProxy server SAN:"
+    openssl x509 -in /etc/haproxy/certs/patroni.crt -text -noout | grep -A 3 "Subject Alternative Name" || echo "Missing SAN"
+  register: server_san
+  changed_when: false 
