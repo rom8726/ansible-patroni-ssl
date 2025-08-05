@@ -84,3 +84,4 @@ cluster_vip_1: 192.168.64.100
 # External network access
 external_networks:
   - "192.168.0.0/24"
+  - "192.168.64.0/24"
