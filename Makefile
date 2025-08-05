@@ -45,6 +45,32 @@ test: ## Run tests
 	@echo "Testing Nginx SSL connections..."
 	./scripts/test_nginx_ssl.sh 192.168.64.11 9443
 
+test-vip: ## Test VIP connections with SSL
+	@echo "Copying VIP-compatible certificates..."
+	./scripts/copy_certificates_vip.sh -s patroni1 -v 192.168.64.100 -d ./certs
+	@echo "Testing VIP connections..."
+	./scripts/test_vip_connections.sh -v 192.168.64.100 -c ./certs
+
+copy-vip-certs: ## Copy VIP-compatible certificates
+	./scripts/copy_certificates_vip.sh -s patroni1 -v 192.168.64.100 -d ./certs
+
+check-certs: ## Check if certificates include VIP in SAN
+	./scripts/check_certificates_vip.sh -s patroni1 -v 192.168.64.100
+
+clean-certs: ## Clean and regenerate certificates
+	ansible-playbook -i inventory.ini playbook.yml --tags certificates -e 'clean_certificates=true'
+
+regenerate-certs: ## Regenerate certificates with VIP support
+	ansible-playbook -i inventory.ini playbook.yml --tags certificates
+
+restart-services: ## Restart services after certificate changes
+	ansible-playbook -i inventory.ini playbook.yml --tags haproxy,nginx,patroni
+
+update-certs: ## Complete certificate update process
+	ansible-playbook -i inventory.ini playbook.yml --tags certificates -e 'clean_certificates=true' && \
+	ansible-playbook -i inventory.ini playbook.yml --tags certificates && \
+	ansible-playbook -i inventory.ini playbook.yml --tags haproxy,nginx,patroni
+
 debug-etcd: ## etcd diagnostics
 	./scripts/debug_etcd.sh 192.168.64.11 root
 

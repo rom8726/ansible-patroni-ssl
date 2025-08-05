@@ -111,6 +111,59 @@ curl --cert /path/to/nginx_client.crt \
   https://192.168.64.100:9443/cluster
 ```
 
+### VIP Connection with SSL Certificates
+
+The cluster supports SSL connections via Keepalived VIP address (192.168.64.100) with proper certificate validation.
+
+#### Copy VIP-Compatible Certificates
+```bash
+# Copy certificates from cluster node with VIP support
+./scripts/copy_certificates_vip.sh -s patroni1 -v 192.168.64.100 -d ./certs
+
+# This creates:
+# - ./certs/postgresql/ - PostgreSQL client certificates
+# - ./certs/nginx/ - Nginx client certificates  
+# - ./certs/haproxy/ - HAProxy certificates
+# - ./certs/patroni/ - Patroni API certificates
+# - Connection configuration files
+# - README with usage examples
+```
+
+#### Connect via VIP with SSL
+```bash
+# PostgreSQL Master via HAProxy (port 5000)
+psql "host=192.168.64.100 port=5000 sslmode=verify-full sslcert=./certs/postgresql/client.crt sslkey=./certs/postgresql/client.key sslrootcert=./certs/postgresql/root.crt"
+
+# PostgreSQL Replica via HAProxy (port 5001)
+psql "host=192.168.64.100 port=5001 sslmode=verify-full sslcert=./certs/postgresql/client.crt sslkey=./certs/postgresql/client.key sslrootcert=./certs/postgresql/root.crt"
+
+# Patroni API via HAProxy (port 8443)
+curl --cert ./certs/patroni/client.crt --key ./certs/patroni/client.key --cacert ./certs/haproxy/ca.crt https://192.168.64.100:8443/cluster
+
+# Nginx via VIP (port 9443)
+curl --cert ./certs/nginx/client.crt --key ./certs/nginx/client.key --cacert ./certs/nginx/ca.crt https://192.168.64.100:9443/
+```
+
+#### Test VIP Connections
+```bash
+# Test all VIP connections
+./scripts/test_vip_connections.sh -v 192.168.64.100 -c ./certs
+
+# Test specific services
+./scripts/test_vip_connections.sh --test-postgres -v 192.168.64.100
+./scripts/test_vip_connections.sh --test-nginx -v 192.168.64.100
+./scripts/test_vip_connections.sh --test-haproxy -v 192.168.64.100
+```
+
+#### VIP Port Mapping
+- **PostgreSQL Master**: 192.168.64.100:5000 (HAProxy)
+- **PostgreSQL Replica**: 192.168.64.100:5001 (HAProxy)  
+- **Patroni API**: 192.168.64.100:8443 (HAProxy SSL)
+- **Nginx**: 192.168.64.100:9443 (SSL)
+- **HAProxy Stats**: 192.168.64.100:7000 (HTTP)
+
+All certificates include the VIP address (192.168.64.100) in their Subject Alternative Name (SAN) field for proper SSL validation.
+
 ## Diagnostics
 
 ### Scripts in scripts/
@@ -123,6 +176,12 @@ curl --cert /path/to/nginx_client.crt \
 
 # Copy certificates for testing
 ./scripts/copy_certificates.sh
+
+# Copy certificates with VIP support
+./scripts/copy_certificates_vip.sh -s patroni1 -v 192.168.64.100
+
+# Test VIP connections
+./scripts/test_vip_connections.sh -v 192.168.64.100 -c ./certs
 ```
 
 ### Logs

@@ -1,4 +1,18 @@
 ---
+- name: Clean existing certificates if requested
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/postgresql/certs
+    - /etc/patroni/certs
+    - /etc/haproxy/certs
+    - /etc/nginx/ssl
+    - /home/postgres/certs
+    - /home/postgres/patroni-certs
+    - /root/certs
+  when: clean_certificates | default(false)
+
 - name: Install OpenSSL
   ansible.builtin.apt:
     name: openssl
@@ -329,7 +343,7 @@
     state_or_province_name: "Moscow"
     locality_name: "Moscow"
     email_address: "admin@tantorlabs.ru"
-    subject_alt_name: "DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }}"
+    subject_alt_name: "DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
 
 - name: Create HAProxy extfile
   ansible.builtin.copy:
@@ -338,7 +352,7 @@
       basicConstraints = CA:FALSE
       keyUsage = digitalSignature,keyEncipherment
       extendedKeyUsage = serverAuth
-      subjectAltName = DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }}
+      subjectAltName = DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
     dest: /etc/haproxy/certs/patroni.ext
     mode: '0644'
 

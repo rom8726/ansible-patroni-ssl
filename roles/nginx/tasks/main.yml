@@ -98,7 +98,7 @@
     state_or_province_name: "Moscow"
     locality_name: "Moscow"
     email_address: "admin@tantorlabs.ru"
-    subject_alt_name: "DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+    subject_alt_name: "DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
 
 - name: Create nginx extfile
   ansible.builtin.copy:
@@ -107,7 +107,7 @@
       basicConstraints = CA:FALSE
       keyUsage = digitalSignature,keyEncipherment
       extendedKeyUsage = serverAuth
-      subjectAltName = DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+      subjectAltName = DNS:{{ inventory_hostname }},DNS:{{ ansible_host }},IP:{{ ansible_host }},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
     dest: /etc/nginx/ssl/nginx.ext
     mode: '0644'
 
@@ -159,7 +159,7 @@
     state_or_province_name: "Moscow"
     locality_name: "Moscow"
     email_address: "admin@tantorlabs.ru"
-    subject_alt_name: "DNS:nginx-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
+    subject_alt_name: "DNS:nginx-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}"
 
 # Create nginx client extfile
 - name: Create nginx client extfile
@@ -169,7 +169,7 @@
       basicConstraints = CA:FALSE
       keyUsage = digitalSignature,keyEncipherment
       extendedKeyUsage = clientAuth
-      subjectAltName = DNS:nginx-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
+      subjectAltName = DNS:nginx-client,DNS:{{ inventory_hostname }}{% for host in groups['promoters'] %},DNS:{{ hostvars[host]['inventory_hostname'] }},IP:{{ hostvars[host]['ansible_host'] }}{% endfor %},IP:{{ cluster_vip_1 }}{% for network in external_networks %},IP:{{ network.split('/')[0] }}{% endfor %}
     dest: /root/certs/nginx/client.ext
     mode: '0644'
 

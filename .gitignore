@@ -3,3 +3,5 @@
 .ansible/
 ansible.cfg
 inventory.ini
+tmp/
+certs/
